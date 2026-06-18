@@ -1,0 +1,38 @@
+# Core framework
+flask==3.0.3
+
+# HTTP client
+requests==2.31.0
+
+# Web scraping
+beautifulsoup4==4.12.3
+
+# Color extraction
+colorthief==0.2.1
+Pillow==10.3.0
+
+# ── NEW: Security & Validation libraries ──────────────────────
+
+# Pydantic: URL/JSON input validation with type enforcement
+pydantic==2.7.1
+
+# Flask-Smorest: schema validation + auto OpenAPI/Swagger docs
+flask-smorest==0.44.0
+
+# Flask-Talisman: HTTPS enforcement + secure HTTP headers
+flask-talisman==1.1.0
+
+# Flask-Limiter: rate limiting (prevent abuse)
+flask-limiter==3.7.0
+
+# Bleach: sanitize any HTML in user-supplied content
+bleach==6.1.0
+
+# Production WSGI server
+gunicorn==22.0.0
+
+# Testing
+pytest==8.2.2
+
+# Security scanning (run manually: bandit -r . )
+bandit==1.7.9
