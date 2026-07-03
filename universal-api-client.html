@@ -811,7 +811,7 @@
             `;
 
             // Overall Score Summary
-            const overallScore = (scores.accessibility + scores.colorQuality + scores.contrast) / 3;
+            const overallScore = (scores.accessibility + scores.wcagAA + scores.wcagAAA + scores.colorQuality + scores.avgContrast + scores.failingPairs + scores.extraction + scores.diversity) / 8;
             const overallLabel = getScoreLabel(overallScore);
             html += `
                 <div class="card" style="grid-column: 1 / -1;">
@@ -831,15 +831,19 @@
             // Parameter Scores
             html += `
                 <div class="card" style="grid-column: 1 / -1;">
-                    <h3>Performance by Parameter</h3>
+                    <h3>Performance by Parameter (8 Metrics)</h3>
                     <div class="metrics-grid">
             `;
 
             const params = [
                 { name: 'Accessibility', score: scores.accessibility, icon: '♿' },
+                { name: 'WCAG AA Compliance', score: scores.wcagAA, icon: '✓' },
+                { name: 'WCAG AAA Compliance', score: scores.wcagAAA, icon: '★' },
                 { name: 'Color Quality', score: scores.colorQuality, icon: '🎨' },
-                { name: 'Contrast Ratio', score: scores.contrast, icon: '◐◑' },
-                { name: 'Color Extraction', score: scores.extraction, icon: '🔍' }
+                { name: 'Contrast Ratio', score: scores.avgContrast, icon: '◐◑' },
+                { name: 'Failing Pairs Score', score: scores.failingPairs, icon: '⚠️' },
+                { name: 'Color Extraction', score: scores.extraction, icon: '🔍' },
+                { name: 'Palette Diversity', score: scores.diversity, icon: '🌈' }
             ];
 
             params.forEach(p => {
@@ -954,26 +958,49 @@
         }
 
         function calculateParameterScores(data) {
-            // Accessibility Score (0-100)
+            const pairs = data.accessibility?.pairs || [];
+            const totalPairs = data.accessibility?.total_pairs || 1;
+
+            // 1. Accessibility Score (0-100)
             const accessibilityScore = data.accessibility?.accessibility_score || 0;
 
-            // Color Quality Score based on scheme harmony (0-100)
+            // 2. Color Quality Score based on scheme harmony (0-100)
             const colorQualityScore = Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
 
-            // Contrast Ratio Score (0-100)
-            const contrastRatio = data.accessibility?.aa_passing_pairs || 0;
-            const totalPairs = data.accessibility?.total_pairs || 1;
-            const contrastScore = (contrastRatio / totalPairs) * 100;
+            // 3. WCAG AA Compliance (0-100)
+            const aaPassingPairs = data.accessibility?.aa_passing_pairs || 0;
+            const aaScore = (aaPassingPairs / totalPairs) * 100;
 
-            // Color Extraction Quality (0-100) - based on number of distinct colors
+            // 4. WCAG AAA Compliance (0-100)
+            const aaaPassingPairs = pairs.filter(p => p.aaa_normal).length;
+            const aaaScore = (aaaPassingPairs / totalPairs) * 100;
+
+            // 5. Failing Pairs Ratio (0-100) - inverse score
+            const failingPairs = pairs.filter(p => p.label === 'FAIL').length;
+            const failingScore = 100 - ((failingPairs / totalPairs) * 100);
+
+            // 6. Color Extraction Quality (0-100)
             const colorsFound = data.total_colors_found || 0;
             const extractionScore = Math.min(100, (colorsFound / 12) * 100);
+
+            // 7. Palette Diversity (0-100) - based on hue distance
+            const hueDist = data.color_scheme?.max_hue_distance_deg || 0;
+            const diversityScore = Math.min(100, (hueDist / 360) * 100);
+
+            // 8. Average Contrast Ratio Score
+            const avgContrastRatio = pairs.length > 0
+                ? pairs.reduce((sum, p) => sum + Math.min(p.contrast_ratio, 21), 0) / pairs.length / 21 * 100
+                : 0;
 
             return {
                 accessibility: accessibilityScore,
                 colorQuality: colorQualityScore,
-                contrast: contrastScore,
-                extraction: extractionScore
+                wcagAA: aaScore,
+                wcagAAA: aaaScore,
+                failingPairs: failingScore,
+                extraction: extractionScore,
+                diversity: diversityScore,
+                avgContrast: avgContrastRatio
             };
         }
 
@@ -1007,69 +1034,159 @@
         function generateRecommendations(scores, data) {
             const recommendations = [];
 
-            // Accessibility recommendations
-            if (scores.accessibility < 50) {
+            // 1. Accessibility score
+            if (scores.accessibility < 40) {
                 recommendations.push({
-                    text: 'Critical: Accessibility score is low. Improve color contrast ratios significantly.',
+                    text: '🔴 CRITICAL: Overall accessibility is very poor. Immediate redesign of color palette needed.',
                     severity: 'danger',
                     icon: '⚠️'
                 });
-            } else if (scores.accessibility < 75) {
+            } else if (scores.accessibility < 60) {
                 recommendations.push({
-                    text: 'Accessibility can be improved. Review failing color pairs and increase contrast.',
+                    text: '🟠 Accessibility score is low. Many users may struggle to read content.',
+                    severity: 'danger',
+                    icon: '⚠️'
+                });
+            } else if (scores.accessibility < 80) {
+                recommendations.push({
+                    text: '🟡 Accessibility is moderate. Consider improving contrast in critical areas.',
                     severity: 'warning',
                     icon: '⚡'
                 });
             } else {
                 recommendations.push({
-                    text: 'Strong accessibility compliance. Keep current color palette.',
+                    text: '🟢 Excellent accessibility. Color palette is inclusive for most users.',
                     severity: '',
                     icon: '✅'
                 });
             }
 
-            // Color Quality recommendations
-            if (scores.colorQuality < 60) {
+            // 2. WCAG AA Compliance
+            if (scores.wcagAA < 50) {
                 recommendations.push({
-                    text: 'Color palette has low harmony. Consider using a more cohesive color scheme.',
+                    text: 'Only ~' + scores.wcagAA.toFixed(0) + '% of color pairs meet WCAG AA. Prioritize high-contrast combinations.',
+                    severity: 'danger',
+                    icon: '✓'
+                });
+            } else if (scores.wcagAA < 80) {
+                recommendations.push({
+                    text: 'WCAG AA compliance at ' + scores.wcagAA.toFixed(0) + '%. Boost compliance by refining problematic pairs.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Strong WCAG AA compliance (' + scores.wcagAA.toFixed(0) + '%+). Standard text accessibility maintained.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // 3. WCAG AAA Compliance
+            if (scores.wcagAAA < 30) {
+                recommendations.push({
+                    text: 'Low AAA compliance. Consider dedicated high-contrast mode for accessibility.',
+                    severity: 'warning',
+                    icon: '★'
+                });
+            } else if (scores.wcagAAA > 70) {
+                recommendations.push({
+                    text: 'Excellent AAA compliance. Supports enhanced contrast requirements.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // 4. Color Quality/Harmony
+            if (scores.colorQuality < 40) {
+                recommendations.push({
+                    text: 'Color palette lacks harmony. Colors are too diverse and may look disconnected.',
                     severity: 'warning',
                     icon: '🎨'
                 });
-            } else {
+            } else if (scores.colorQuality < 70) {
                 recommendations.push({
-                    text: 'Color scheme is harmonious and well-balanced.',
-                    severity: '',
-                    icon: '✅'
-                });
-            }
-
-            // Contrast recommendations
-            if (scores.contrast < 60) {
-                recommendations.push({
-                    text: 'Many color pairs fail WCAG standards. Prioritize fixing low-contrast combinations.',
-                    severity: 'danger',
-                    icon: '◐◑'
-                });
-            } else if (scores.contrast < 80) {
-                recommendations.push({
-                    text: 'Most color pairs are compliant, but some can be improved.',
+                    text: 'Color harmony could improve. Palette uses too many different hues.',
                     severity: 'warning',
                     icon: '⚡'
                 });
             } else {
                 recommendations.push({
-                    text: 'Excellent contrast compliance across most color pairs.',
+                    text: 'Harmonious color scheme. Palette is cohesive and visually pleasing.',
                     severity: '',
                     icon: '✅'
                 });
             }
 
-            // Color extraction
-            if (scores.extraction < 50) {
+            // 5. Average Contrast Ratio
+            if (scores.avgContrast < 40) {
                 recommendations.push({
-                    text: 'Few colors extracted. The palette may be too limited.',
+                    text: 'Average contrast ratio is very low. Increase luminosity differences between colors.',
+                    severity: 'danger',
+                    icon: '◐◑'
+                });
+            } else if (scores.avgContrast < 65) {
+                recommendations.push({
+                    text: 'Average contrast ratio is moderate. Darken backgrounds or lighten text colors.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Strong contrast ratio across palette. Text remains readable.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // 6. Failing Pairs
+            if (scores.failingPairs < 40) {
+                recommendations.push({
+                    text: 'Over 60% of color pairs fail accessibility standards. Major revisions needed.',
+                    severity: 'danger',
+                    icon: '⚠️'
+                });
+            } else if (scores.failingPairs < 70) {
+                recommendations.push({
+                    text: 'Significant number of failing pairs. Focus on eliminating low-contrast combinations.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            }
+
+            // 7. Color Extraction
+            if (scores.extraction < 40) {
+                recommendations.push({
+                    text: 'Limited color palette (' + data.total_colors_found + ' colors). Expand palette for visual richness.',
                     severity: 'warning',
                     icon: '🔍'
+                });
+            } else if (scores.extraction > 80) {
+                recommendations.push({
+                    text: 'Rich color palette (' + data.total_colors_found + ' colors). Consider simplifying for better cohesion.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Good color palette (' + data.total_colors_found + ' colors). Well-balanced diversity.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // 8. Palette Diversity
+            if (scores.diversity < 30) {
+                recommendations.push({
+                    text: 'Low palette diversity. Colors are too similar. Add more contrast in hue.',
+                    severity: 'warning',
+                    icon: '🌈'
+                });
+            } else if (scores.diversity > 80) {
+                recommendations.push({
+                    text: 'High palette diversity. May lack visual unity. Consider reducing hue range.',
+                    severity: 'warning',
+                    icon: '⚡'
                 });
             }
 
@@ -1077,7 +1194,7 @@
             if (data.palette_suggestions && data.palette_suggestions.length > 0) {
                 const topColor = data.palette_suggestions[0];
                 recommendations.push({
-                    text: `Primary color "${topColor.color}" pairs best with ${topColor.recommended_text}. Use ${topColor.best_wcag} standard.`,
+                    text: `💡 Primary color ${topColor.color} achieves best contrast with ${topColor.recommended_text} (ratio: ${topColor.best_ratio.toFixed(1)}, ${topColor.best_wcag})`,
                     severity: '',
                     icon: '💡'
                 });
