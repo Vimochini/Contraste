@@ -1,8 +1,9 @@
 services:
   - type: static
-    name: universal-api-client
+    name: contraste-client
     staticPublishPath: .
     routes:
+      - path: /universal-api-client.html
+        destination: /universal-api-client.html
       - path: /
-        methods: [GET]
         destination: /universal-api-client.html
