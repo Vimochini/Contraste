@@ -1,0 +1,12 @@
+app.py
+requirements.txt
+test_api.py
+config.py
+utils.py
+scraper.py
+color_analysis.py
+venv
+__pycache__
+.git
+.env
+*.pyc

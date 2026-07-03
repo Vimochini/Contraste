@@ -1,29 +1,15 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static site'",
-  "outputDirectory": ".",
-  "public": true,
-  "env": {},
-  "routes": [
+  "builds": [
     {
-      "src": "/universal-api-client.html",
-      "dest": "/universal-api-client.html",
-      "methods": ["GET", "HEAD"]
-    },
+      "src": "universal-api-client.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
     {
       "src": "/(.*)",
       "dest": "/universal-api-client.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/html; charset=utf-8"
-        }
-      ]
     }
   ]
 }
