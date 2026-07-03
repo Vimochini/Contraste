@@ -1,19 +1,27 @@
 {
-  "buildCommand": "echo 'Static site - no build needed'",
+  "version": 2,
+  "buildCommand": "echo 'Static site'",
   "outputDirectory": ".",
-  "rewrites": [
+  "public": true,
+  "env": {},
+  "routes": [
     {
-      "source": "/",
-      "destination": "/universal-api-client.html"
+      "src": "/universal-api-client.html",
+      "dest": "/universal-api-client.html",
+      "methods": ["GET", "HEAD"]
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/universal-api-client.html"
     }
   ],
   "headers": [
     {
-      "source": "/universal-api-client.html",
+      "source": "/(.*)",
       "headers": [
         {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600"
+          "key": "Content-Type",
+          "value": "text/html; charset=utf-8"
         }
       ]
     }
