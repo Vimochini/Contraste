@@ -10,6 +10,7 @@
 
 from flask import Flask, request, jsonify, g
 from flask_smorest import Api, Blueprint
+from flask_cors import CORS
 import marshmallow as ma
 import time
 import logging
@@ -37,6 +38,19 @@ app.config["OPENAPI_URL_PREFIX"] = "/"
 app.config["OPENAPI_SWAGGER_UI_PATH"] = "/docs"
 app.config["OPENAPI_SWAGGER_UI_URL"]  = \
     "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+
+# ══════════════════════════════════════════════════════════════
+# FLASK-CORS – Enable cross-origin requests (for web client)
+# Allows requests from any origin (safe for public API)
+# ══════════════════════════════════════════════════════════════
+CORS(app, resources={
+    r"/analyze": {"origins": "*", "methods": ["POST", "OPTIONS"]},
+    r"/accessibility": {"origins": "*", "methods": ["POST", "OPTIONS"]},
+    r"/colors": {"origins": "*", "methods": ["POST", "OPTIONS"]},
+    r"/": {"origins": "*", "methods": ["GET", "OPTIONS"]},
+    r"/health": {"origins": "*", "methods": ["GET", "OPTIONS"]},
+    r"/docs": {"origins": "*", "methods": ["GET", "OPTIONS"]},
+})
 
 # ══════════════════════════════════════════════════════════════
 # FLASK-TALISMAN – Secure HTTP headers + HTTPS enforcement

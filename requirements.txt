@@ -25,6 +25,9 @@ flask-talisman==1.1.0
 # Flask-Limiter: rate limiting (prevent abuse)
 flask-limiter==3.7.0
 
+# Flask-CORS: enable cross-origin requests from web clients
+flask-cors==4.0.0
+
 # Bleach: sanitize any HTML in user-supplied content
 bleach==6.1.0
 
