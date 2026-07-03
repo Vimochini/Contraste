@@ -827,7 +827,7 @@
             resultsSection.classList.add('show');
 
             const websiteName = extractWebsiteName(url);
-            const confidenceScore = data.confidence_score || 0;
+            const scores = calculateParameterScores(data);
 
             let html = '';
 
@@ -842,39 +842,81 @@
                 </div>
             `;
 
-            // Summary Card
-            if (data.summary) {
-                html += `
-                    <div class="card summary-card">
-                        <h3>Analysis Summary</h3>
-                        <p>${data.summary}</p>
-                    </div>
-                `;
-            }
-
-            // Confidence Score Card
+            // Overall Score Summary
+            const overallScore = (scores.accessibility + scores.colorQuality + scores.contrast) / 3;
+            const overallLabel = getScoreLabel(overallScore);
             html += `
-                <div class="card">
-                    <h3>Confidence Score</h3>
-                    <div class="card-value">${(confidenceScore * 100).toFixed(0)}%</div>
-                    <div class="confidence-bar">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${confidenceScore * 100}%"></div>
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h3>Overall Analysis Score</h3>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="flex: 1;">
+                            <div class="card-value" style="font-size: 48px; margin-bottom: 10px;">${overallScore.toFixed(1)}/100</div>
+                            <div class="progress-bar" style="height: 12px;">
+                                <div class="progress-fill" style="width: ${overallScore}%; background: ${getScoreColor(overallScore)};"></div>
+                            </div>
+                            <div style="margin-top: 8px; color: var(--text-light); font-size: 14px; font-weight: 600;">${overallLabel}</div>
                         </div>
                     </div>
                 </div>
             `;
 
-            // Key Metrics
-            if (data.metrics && Object.keys(data.metrics).length > 0) {
+            // Parameter Scores
+            html += `
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h3>Performance by Parameter</h3>
+                    <div class="metrics-grid">
+            `;
+
+            const params = [
+                { name: 'Accessibility', score: scores.accessibility, icon: '♿' },
+                { name: 'Color Quality', score: scores.colorQuality, icon: '🎨' },
+                { name: 'Contrast Ratio', score: scores.contrast, icon: '◐◑' },
+                { name: 'Color Extraction', score: scores.extraction, icon: '🔍' }
+            ];
+
+            params.forEach(p => {
+                const label = getScoreLabel(p.score);
+                const color = getScoreColor(p.score);
+                html += `
+                    <div class="metric-item" style="border-left: 4px solid ${color};">
+                        <div class="metric-label">${p.icon} ${p.name}</div>
+                        <div class="metric-value" style="color: ${color};">${p.score.toFixed(1)}</div>
+                        <div class="progress-bar" style="margin-top: 8px;">
+                            <div class="progress-fill" style="width: ${p.score}%; background: ${color};"></div>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${label}</div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Color Scheme
+            if (data.color_scheme) {
                 html += `
                     <div class="card">
-                        <h3>Key Metrics</h3>
-                        <div class="metrics-grid">
-                            ${Object.entries(data.metrics).map(([key, value]) => `
-                                <div class="metric-item">
-                                    <div class="metric-label">${formatLabel(key)}</div>
-                                    <div class="metric-value">${formatValue(value)}</div>
+                        <h3>Color Scheme</h3>
+                        <div style="margin-bottom: 8px;">
+                            <span class="badge badge-success">${data.color_scheme.scheme}</span>
+                        </div>
+                        <p style="color: var(--text-light); font-size: 14px;">${data.color_scheme.description}</p>
+                    </div>
+                `;
+            }
+
+            // Extracted Colors
+            if (data.extracted_colors && data.extracted_colors.length > 0) {
+                html += `
+                    <div class="card">
+                        <h3>Extracted Colors (${data.total_colors_found})</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${data.extracted_colors.map(color => `
+                                <div style="display: flex; flex-direction: column; align-items: center;">
+                                    <div style="width: 40px; height: 40px; background: ${color}; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;" title="${color}"></div>
+                                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${color}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -882,44 +924,45 @@
                 `;
             }
 
-            // Status/Category Badge
-            if (data.status) {
-                const badgeClass = data.status.toLowerCase().includes('success')
-                    ? 'badge-success'
-                    : data.status.toLowerCase().includes('warning')
-                    ? 'badge-warning'
-                    : 'badge-danger';
-
+            // Accessibility Details
+            if (data.accessibility) {
+                const wcagStats = getWCAGStats(data.accessibility);
                 html += `
                     <div class="card">
-                        <h3>Status</h3>
-                        <span class="badge ${badgeClass}">${data.status}</span>
-                    </div>
-                `;
-            }
-
-            // Recommendations
-            if (data.recommendations && data.recommendations.length > 0) {
-                html += `
-                    <div class="card" style="grid-column: 1 / -1;">
-                        <h3>Recommendations</h3>
-                        <div class="recommendations">
-                            ${data.recommendations.map((rec, idx) => {
-                                const severity = rec.severity || 'info';
-                                const className = severity === 'danger' ? 'danger' : severity === 'warning' ? 'warning' : '';
-                                return `<div class="recommendation-item ${className}">${rec.text || rec}</div>`;
-                            }).join('')}
+                        <h3>WCAG Compliance</h3>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-label">AAA Compliant</div>
+                                <div class="metric-value">${wcagStats.aaa}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">AA Compliant</div>
+                                <div class="metric-value">${wcagStats.aa}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Failing Pairs</div>
+                                <div class="metric-value" style="color: var(--danger);">${wcagStats.failing}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Total Pairs</div>
+                                <div class="metric-value">${data.accessibility.total_pairs || 0}</div>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
-            // Details/Additional Info
-            if (data.details) {
+            // Smart Recommendations
+            const recommendations = generateRecommendations(scores, data);
+            if (recommendations.length > 0) {
                 html += `
                     <div class="card" style="grid-column: 1 / -1;">
-                        <h3>Additional Details</h3>
-                        <p style="color: var(--text-light);">${data.details}</p>
+                        <h3>📋 Personalized Recommendations</h3>
+                        <div class="recommendations">
+                            ${recommendations.map(rec => {
+                                return `<div class="recommendation-item ${rec.severity}">${rec.icon} ${rec.text}</div>`;
+                            }).join('')}
+                        </div>
                     </div>
                 `;
             }
@@ -940,6 +983,139 @@
             `;
 
             dashboard.innerHTML = html;
+        }
+
+        function calculateParameterScores(data) {
+            // Accessibility Score (0-100)
+            const accessibilityScore = data.accessibility?.accessibility_score || 0;
+
+            // Color Quality Score based on scheme harmony (0-100)
+            const colorQualityScore = Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
+
+            // Contrast Ratio Score (0-100)
+            const contrastRatio = data.accessibility?.aa_passing_pairs || 0;
+            const totalPairs = data.accessibility?.total_pairs || 1;
+            const contrastScore = (contrastRatio / totalPairs) * 100;
+
+            // Color Extraction Quality (0-100) - based on number of distinct colors
+            const colorsFound = data.total_colors_found || 0;
+            const extractionScore = Math.min(100, (colorsFound / 12) * 100);
+
+            return {
+                accessibility: accessibilityScore,
+                colorQuality: colorQualityScore,
+                contrast: contrastScore,
+                extraction: extractionScore
+            };
+        }
+
+        function getScoreLabel(score) {
+            if (score >= 90) return 'Excellent';
+            if (score >= 75) return 'Good';
+            if (score >= 60) return 'Fair';
+            if (score >= 45) return 'Needs Work';
+            return 'Poor';
+        }
+
+        function getScoreColor(score) {
+            if (score >= 90) return '#10b981';
+            if (score >= 75) return '#3b82f6';
+            if (score >= 60) return '#f59e0b';
+            if (score >= 45) return '#f97316';
+            return '#ef4444';
+        }
+
+        function getWCAGStats(accessibility) {
+            if (!accessibility.pairs) return { aaa: 0, aa: 0, failing: 0 };
+
+            const pairs = accessibility.pairs;
+            const aaa = pairs.filter(p => p.aaa_normal).length;
+            const aa = pairs.filter(p => p.aa_normal && !p.aaa_normal).length;
+            const failing = pairs.filter(p => p.label === 'FAIL').length;
+
+            return { aaa, aa, failing };
+        }
+
+        function generateRecommendations(scores, data) {
+            const recommendations = [];
+
+            // Accessibility recommendations
+            if (scores.accessibility < 50) {
+                recommendations.push({
+                    text: 'Critical: Accessibility score is low. Improve color contrast ratios significantly.',
+                    severity: 'danger',
+                    icon: '⚠️'
+                });
+            } else if (scores.accessibility < 75) {
+                recommendations.push({
+                    text: 'Accessibility can be improved. Review failing color pairs and increase contrast.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Strong accessibility compliance. Keep current color palette.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Color Quality recommendations
+            if (scores.colorQuality < 60) {
+                recommendations.push({
+                    text: 'Color palette has low harmony. Consider using a more cohesive color scheme.',
+                    severity: 'warning',
+                    icon: '🎨'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Color scheme is harmonious and well-balanced.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Contrast recommendations
+            if (scores.contrast < 60) {
+                recommendations.push({
+                    text: 'Many color pairs fail WCAG standards. Prioritize fixing low-contrast combinations.',
+                    severity: 'danger',
+                    icon: '◐◑'
+                });
+            } else if (scores.contrast < 80) {
+                recommendations.push({
+                    text: 'Most color pairs are compliant, but some can be improved.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Excellent contrast compliance across most color pairs.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Color extraction
+            if (scores.extraction < 50) {
+                recommendations.push({
+                    text: 'Few colors extracted. The palette may be too limited.',
+                    severity: 'warning',
+                    icon: '🔍'
+                });
+            }
+
+            // Palette improvement suggestions
+            if (data.palette_suggestions && data.palette_suggestions.length > 0) {
+                const topColor = data.palette_suggestions[0];
+                recommendations.push({
+                    text: `Primary color "${topColor.color}" pairs best with ${topColor.recommended_text}. Use ${topColor.best_wcag} standard.`,
+                    severity: '',
+                    icon: '💡'
+                });
+            }
+
+            return recommendations;
         }
 
         // Utility Functions
