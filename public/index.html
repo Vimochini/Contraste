@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal API Client - Website Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #1e40af;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f9fafb;
+            --dark: #111827;
+            --border: #e5e7eb;
+            --border-dark: #374151;
+            --text-light: #6b7280;
+            --text-dark: #1f2937;
+        }
+
+        body.dark-mode {
+            --light: #1a1f2e;
+            --dark: #f9fafb;
+            --border: #374151;
+            --border-dark: #e5e7eb;
+            --text-light: #9ca3af;
+            --text-dark: #f9fafb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: var(--text-dark);
+            line-height: 1.6;
+            min-height: 100vh;
+            transition: background 0.3s ease;
+        }
+
+        body.dark-mode {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 0;
+            margin-bottom: 40px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            transition: background 0.3s ease;
+        }
+
+        body.dark-mode header {
+            background: rgba(17, 24, 39, 0.95);
+            border-bottom-color: var(--border);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: var(--light);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        .input-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode .input-section {
+            background: #1f2937;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-section h2 {
+            margin-bottom: 20px;
+            font-size: 20px;
+            color: var(--text-dark);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 14px;
+        }
+
+        input[type="url"],
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+            color: var(--text-dark);
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode input[type="url"],
+        body.dark-mode input[type="text"],
+        body.dark-mode textarea,
+        body.dark-mode select {
+            background: #111827;
+            color: var(--text-dark);
+            border-color: var(--border);
+        }
+
+        input[type="url"]:focus,
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--light);
+            color: var(--text-dark);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border-left: 4px solid var(--danger);
+        }
+
+        body.dark-mode .error-message {
+            background: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-section.show {
+            display: block;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode .card {
+            background: #1f2937;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        body.dark-mode .card:hover {
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-dark);
+            word-break: break-word;
+        }
+
+        .website-card {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .website-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .website-info h2 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+        }
+
+        .website-url {
+            color: var(--text-light);
+            word-break: break-all;
+            font-size: 14px;
+        }
+
+        .summary-card {
+            grid-column: 1 / -1;
+        }
+
+        .summary-card p {
+            color: var(--text-light);
+            line-height: 1.8;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .metric-item {
+            padding: 12px;
+            background: var(--light);
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode .metric-item {
+            background: #111827;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .confidence-bar {
+            margin-top: 16px;
+        }
+
+        .confidence-label {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--light);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        body.dark-mode .progress-bar {
+            background: #111827;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .recommendations {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .recommendation-item {
+            padding: 12px;
+            background: #f0fdf4;
+            border-left: 4px solid var(--success);
+            border-radius: 4px;
+            font-size: 14px;
+            color: #15803d;
+        }
+
+        body.dark-mode .recommendation-item {
+            background: #064e3b;
+            color: #86efac;
+        }
+
+        .recommendation-item.warning {
+            background: #fffbeb;
+            border-left-color: var(--warning);
+            color: #92400e;
+        }
+
+        body.dark-mode .recommendation-item.warning {
+            background: #78350f;
+            color: #fcd34d;
+        }
+
+        .recommendation-item.danger {
+            background: #fef2f2;
+            border-left-color: var(--danger);
+            color: #991b1b;
+        }
+
+        body.dark-mode .recommendation-item.danger {
+            background: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--light);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        body.dark-mode .spinner {
+            border-color: #374151;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .export-section {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-export {
+            background: var(--light);
+            color: var(--text-dark);
+            border: 2px solid var(--border);
+            padding: 10px 16px;
+            font-size: 13px;
+        }
+
+        .btn-export:hover {
+            background: var(--border);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        body.dark-mode .badge-success {
+            background: #064e3b;
+            color: #86efac;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        body.dark-mode .badge-warning {
+            background: #78350f;
+            color: #fcd34d;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        body.dark-mode .badge-danger {
+            background: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 16px;
+        }
+
+        .new-analysis-btn {
+            grid-column: 1 / -1;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .website-card {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .export-section {
+                flex-direction: column;
+            }
+
+            .btn-export {
+                width: 100%;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">🔍 API Analyzer</div>
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="main-content">
+            <!-- Input Section -->
+            <div class="input-section" id="inputSection">
+                <h2>Analyze Any Website</h2>
+
+                <div class="error-message" id="errorMessage"></div>
+
+                <form id="analysisForm">
+                    <div class="form-group">
+                        <label for="websiteUrl">Website URL *</label>
+                        <input
+                            type="url"
+                            id="websiteUrl"
+                            placeholder="https://example.com"
+                            required
+                            aria-label="Website URL to analyze"
+                        >
+                        <small style="color: var(--text-light); display: block; margin-top: 6px;">
+                            Enter the complete URL of the website you want to analyze
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userObservations">Your Observations</label>
+                        <textarea
+                            id="userObservations"
+                            placeholder="Describe your experience, observations, or specific areas of concern..."
+                            aria-label="User observations about the website"
+                        ></textarea>
+                    </div>
+
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label for="ratingScore">Overall Rating (1-10)</label>
+                            <input
+                                type="text"
+                                id="ratingScore"
+                                placeholder="e.g., 7"
+                                aria-label="Overall rating score"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="category">Category (Optional)</label>
+                            <select id="category" aria-label="Website category">
+                                <option value="">Select a category</option>
+                                <option value="video_sharing">Video Sharing</option>
+                                <option value="code_repository">Code Repository</option>
+                                <option value="social_media">Social Media</option>
+                                <option value="gaming">Gaming</option>
+                                <option value="education">Education</option>
+                                <option value="ecommerce">E-Commerce</option>
+                                <option value="productivity">Productivity</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary" id="analyzeBtn">
+                            Analyze Now
+                        </button>
+                        <button type="reset" class="btn-secondary">
+                            Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Analyzing website...</p>
+                <p style="color: var(--text-light); font-size: 14px; margin-top: 10px;">
+                    This may take a few moments
+                </p>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection">
+                <div class="dashboard" id="dashboard"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // CONFIGURATION - Update this constant with your deployed Render API endpoint
+        // ============================================================================
+        const API_ENDPOINT = 'https://contraste-zpkl.onrender.com/analyze';
+        // ============================================================================
+
+        // DOM Elements
+        const themeToggle = document.getElementById('themeToggle');
+        const analysisForm = document.getElementById('analysisForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const loading = document.getElementById('loading');
+        const inputSection = document.getElementById('inputSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const dashboard = document.getElementById('dashboard');
+
+        // Theme Management
+        function initTheme() {
+            const isDark = localStorage.getItem('theme') === 'dark';
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                themeToggle.textContent = '☀️';
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+        });
+
+        // Input Validation
+        function validateInputs() {
+            const url = document.getElementById('websiteUrl').value.trim();
+            const rating = document.getElementById('ratingScore').value.trim();
+
+            // Validate URL
+            try {
+                new URL(url);
+            } catch {
+                showError('Please enter a valid website URL (including https://)');
+                return false;
+            }
+
+            // Validate rating if provided
+            if (rating) {
+                const ratingNum = parseFloat(rating);
+                if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+                    showError('Rating must be a number between 1 and 10');
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Error Display
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            setTimeout(() => {
+                errorMessage.classList.remove('show');
+            }, 5000);
+        }
+
+        // Form Submission
+        analysisForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!validateInputs()) return;
+
+            const url = document.getElementById('websiteUrl').value.trim();
+            const observations = document.getElementById('userObservations').value.trim();
+            const rating = document.getElementById('ratingScore').value.trim();
+            const category = document.getElementById('category').value;
+
+            // Show loading state
+            inputSection.style.display = 'none';
+            resultsSection.classList.remove('show');
+            loading.classList.add('show');
+            errorMessage.classList.remove('show');
+
+            try {
+                // Prepare request payload
+                const payload = {
+                    url: url,
+                    observations: observations || null,
+                    rating: rating ? parseFloat(rating) : null,
+                    category: category || null,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Call API
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(
+                        errorData.message ||
+                        `API Error: ${response.status} ${response.statusText}`
+                    );
+                }
+
+                const data = await response.json();
+                displayResults(url, data);
+
+            } catch (error) {
+                loading.classList.remove('show');
+                inputSection.style.display = 'block';
+                console.error('Error:', error);
+                showError(
+                    error.message.includes('API Error')
+                        ? error.message
+                        : `Network error: ${error.message}. Please check your connection and API endpoint.`
+                );
+            }
+        });
+
+        // Results Display
+        function displayResults(url, data) {
+            loading.classList.remove('show');
+            resultsSection.classList.add('show');
+
+            const websiteName = extractWebsiteName(url);
+            const scores = calculateParameterScores(data);
+
+            let html = '';
+
+            // Website Info Card
+            html += `
+                <div class="card website-card">
+                    <div class="website-icon">${getWebsiteIcon(url)}</div>
+                    <div class="website-info">
+                        <h2>${websiteName}</h2>
+                        <div class="website-url">${url}</div>
+                    </div>
+                </div>
+            `;
+
+            // Overall Score Summary
+            const overallScore = (scores.accessibility + scores.colorQuality + scores.contrast) / 3;
+            const overallLabel = getScoreLabel(overallScore);
+            html += `
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h3>Overall Analysis Score</h3>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="flex: 1;">
+                            <div class="card-value" style="font-size: 48px; margin-bottom: 10px;">${overallScore.toFixed(1)}/100</div>
+                            <div class="progress-bar" style="height: 12px;">
+                                <div class="progress-fill" style="width: ${overallScore}%; background: ${getScoreColor(overallScore)};"></div>
+                            </div>
+                            <div style="margin-top: 8px; color: var(--text-light); font-size: 14px; font-weight: 600;">${overallLabel}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Parameter Scores
+            html += `
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h3>Performance by Parameter</h3>
+                    <div class="metrics-grid">
+            `;
+
+            const params = [
+                { name: 'Accessibility', score: scores.accessibility, icon: '♿' },
+                { name: 'Color Quality', score: scores.colorQuality, icon: '🎨' },
+                { name: 'Contrast Ratio', score: scores.contrast, icon: '◐◑' },
+                { name: 'Color Extraction', score: scores.extraction, icon: '🔍' }
+            ];
+
+            params.forEach(p => {
+                const label = getScoreLabel(p.score);
+                const color = getScoreColor(p.score);
+                html += `
+                    <div class="metric-item" style="border-left: 4px solid ${color};">
+                        <div class="metric-label">${p.icon} ${p.name}</div>
+                        <div class="metric-value" style="color: ${color};">${p.score.toFixed(1)}</div>
+                        <div class="progress-bar" style="margin-top: 8px;">
+                            <div class="progress-fill" style="width: ${p.score}%; background: ${color};"></div>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${label}</div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Color Scheme
+            if (data.color_scheme) {
+                html += `
+                    <div class="card">
+                        <h3>Color Scheme</h3>
+                        <div style="margin-bottom: 8px;">
+                            <span class="badge badge-success">${data.color_scheme.scheme}</span>
+                        </div>
+                        <p style="color: var(--text-light); font-size: 14px;">${data.color_scheme.description}</p>
+                    </div>
+                `;
+            }
+
+            // Extracted Colors
+            if (data.extracted_colors && data.extracted_colors.length > 0) {
+                html += `
+                    <div class="card">
+                        <h3>Extracted Colors (${data.total_colors_found})</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${data.extracted_colors.map(color => `
+                                <div style="display: flex; flex-direction: column; align-items: center;">
+                                    <div style="width: 40px; height: 40px; background: ${color}; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;" title="${color}"></div>
+                                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${color}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Accessibility Details
+            if (data.accessibility) {
+                const wcagStats = getWCAGStats(data.accessibility);
+                html += `
+                    <div class="card">
+                        <h3>WCAG Compliance</h3>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-label">AAA Compliant</div>
+                                <div class="metric-value">${wcagStats.aaa}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">AA Compliant</div>
+                                <div class="metric-value">${wcagStats.aa}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Failing Pairs</div>
+                                <div class="metric-value" style="color: var(--danger);">${wcagStats.failing}</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Total Pairs</div>
+                                <div class="metric-value">${data.accessibility.total_pairs || 0}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Smart Recommendations
+            const recommendations = generateRecommendations(scores, data);
+            if (recommendations.length > 0) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <h3>📋 Personalized Recommendations</h3>
+                        <div class="recommendations">
+                            ${recommendations.map(rec => {
+                                return `<div class="recommendation-item ${rec.severity}">${rec.icon} ${rec.text}</div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Export Options
+            html += `
+                <div class="export-section">
+                    <button class="btn-export" onclick="exportAsJSON('${websiteName}', ${JSON.stringify(data).replace(/'/g, "\\'")})">
+                        📥 Export as JSON
+                    </button>
+                    <button class="btn-export" onclick="copyToClipboard('${websiteName}', ${JSON.stringify(data).replace(/'/g, "\\'")})">
+                        📋 Copy to Clipboard
+                    </button>
+                    <button class="btn-export btn-primary" onclick="newAnalysis()">
+                        🔄 New Analysis
+                    </button>
+                </div>
+            `;
+
+            dashboard.innerHTML = html;
+        }
+
+        function calculateParameterScores(data) {
+            // Accessibility Score (0-100)
+            const accessibilityScore = data.accessibility?.accessibility_score || 0;
+
+            // Color Quality Score based on scheme harmony (0-100)
+            const colorQualityScore = Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
+
+            // Contrast Ratio Score (0-100)
+            const contrastRatio = data.accessibility?.aa_passing_pairs || 0;
+            const totalPairs = data.accessibility?.total_pairs || 1;
+            const contrastScore = (contrastRatio / totalPairs) * 100;
+
+            // Color Extraction Quality (0-100) - based on number of distinct colors
+            const colorsFound = data.total_colors_found || 0;
+            const extractionScore = Math.min(100, (colorsFound / 12) * 100);
+
+            return {
+                accessibility: accessibilityScore,
+                colorQuality: colorQualityScore,
+                contrast: contrastScore,
+                extraction: extractionScore
+            };
+        }
+
+        function getScoreLabel(score) {
+            if (score >= 90) return 'Excellent';
+            if (score >= 75) return 'Good';
+            if (score >= 60) return 'Fair';
+            if (score >= 45) return 'Needs Work';
+            return 'Poor';
+        }
+
+        function getScoreColor(score) {
+            if (score >= 90) return '#10b981';
+            if (score >= 75) return '#3b82f6';
+            if (score >= 60) return '#f59e0b';
+            if (score >= 45) return '#f97316';
+            return '#ef4444';
+        }
+
+        function getWCAGStats(accessibility) {
+            if (!accessibility.pairs) return { aaa: 0, aa: 0, failing: 0 };
+
+            const pairs = accessibility.pairs;
+            const aaa = pairs.filter(p => p.aaa_normal).length;
+            const aa = pairs.filter(p => p.aa_normal && !p.aaa_normal).length;
+            const failing = pairs.filter(p => p.label === 'FAIL').length;
+
+            return { aaa, aa, failing };
+        }
+
+        function generateRecommendations(scores, data) {
+            const recommendations = [];
+
+            // Accessibility recommendations
+            if (scores.accessibility < 50) {
+                recommendations.push({
+                    text: 'Critical: Accessibility score is low. Improve color contrast ratios significantly.',
+                    severity: 'danger',
+                    icon: '⚠️'
+                });
+            } else if (scores.accessibility < 75) {
+                recommendations.push({
+                    text: 'Accessibility can be improved. Review failing color pairs and increase contrast.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Strong accessibility compliance. Keep current color palette.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Color Quality recommendations
+            if (scores.colorQuality < 60) {
+                recommendations.push({
+                    text: 'Color palette has low harmony. Consider using a more cohesive color scheme.',
+                    severity: 'warning',
+                    icon: '🎨'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Color scheme is harmonious and well-balanced.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Contrast recommendations
+            if (scores.contrast < 60) {
+                recommendations.push({
+                    text: 'Many color pairs fail WCAG standards. Prioritize fixing low-contrast combinations.',
+                    severity: 'danger',
+                    icon: '◐◑'
+                });
+            } else if (scores.contrast < 80) {
+                recommendations.push({
+                    text: 'Most color pairs are compliant, but some can be improved.',
+                    severity: 'warning',
+                    icon: '⚡'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Excellent contrast compliance across most color pairs.',
+                    severity: '',
+                    icon: '✅'
+                });
+            }
+
+            // Color extraction
+            if (scores.extraction < 50) {
+                recommendations.push({
+                    text: 'Few colors extracted. The palette may be too limited.',
+                    severity: 'warning',
+                    icon: '🔍'
+                });
+            }
+
+            // Palette improvement suggestions
+            if (data.palette_suggestions && data.palette_suggestions.length > 0) {
+                const topColor = data.palette_suggestions[0];
+                recommendations.push({
+                    text: `Primary color "${topColor.color}" pairs best with ${topColor.recommended_text}. Use ${topColor.best_wcag} standard.`,
+                    severity: '',
+                    icon: '💡'
+                });
+            }
+
+            return recommendations;
+        }
+
+        // Utility Functions
+        function extractWebsiteName(url) {
+            try {
+                const { hostname } = new URL(url);
+                return hostname
+                    .replace('www.', '')
+                    .split('.')[0]
+                    .charAt(0).toUpperCase() +
+                    hostname.replace('www.', '')
+                    .split('.')[0]
+                    .slice(1);
+            } catch {
+                return 'Website';
+            }
+        }
+
+        function getWebsiteIcon(url) {
+            const domain = new URL(url).hostname;
+            const iconMap = {
+                'youtube': '📺',
+                'github': '🐙',
+                'reddit': '🔥',
+                'instagram': '📸',
+                'twitter': '𝕏',
+                'x.com': '𝕏',
+                'facebook': '👤',
+                'linkedin': '💼',
+                'twitch': '🎮',
+                'discord': '💬',
+                'amazon': '🛒',
+                'ebay': '🏪',
+                'spotify': '🎵',
+                'netflix': '🎬',
+                'google': '🔍',
+                'wikipedia': '📚',
+                'stackoverflow': '🔑',
+                'medium': '📖',
+                'slack': '💼',
+                'notion': '📝'
+            };
+
+            for (const [key, icon] of Object.entries(iconMap)) {
+                if (domain.includes(key)) return icon;
+            }
+            return '🌐';
+        }
+
+        function formatLabel(key) {
+            return key
+                .replace(/_/g, ' ')
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
+        function formatValue(value) {
+            if (typeof value === 'boolean') return value ? '✓ Yes' : '✗ No';
+            if (typeof value === 'number') return value.toLocaleString();
+            return String(value);
+        }
+
+        function exportAsJSON(websiteName, data) {
+            const timestamp = new Date().toISOString();
+            const exportData = {
+                website: websiteName,
+                url: document.getElementById('websiteUrl').value,
+                analyzed_at: timestamp,
+                results: data
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${websiteName}-analysis-${timestamp.split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('✓ Results exported as JSON');
+        }
+
+        function copyToClipboard(websiteName, data) {
+            const timestamp = new Date().toISOString();
+            const text = `
+Website Analysis Report
+=======================
+Website: ${websiteName}
+URL: ${document.getElementById('websiteUrl').value}
+Analyzed: ${timestamp}
+
+Results:
+${JSON.stringify(data, null, 2)}
+            `.trim();
+
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('✓ Results copied to clipboard');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('✗ Failed to copy results');
+            });
+        }
+
+        function newAnalysis() {
+            analysisForm.reset();
+            resultsSection.classList.remove('show');
+            inputSection.style.display = 'block';
+            document.getElementById('websiteUrl').focus();
+            window.scrollTo(0, 0);
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Initialize
+        initTheme();
+        document.getElementById('websiteUrl').focus();
+    </script>
+</body>
+</html>
