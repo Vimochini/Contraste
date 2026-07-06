@@ -963,15 +963,25 @@
                 </div>
             `;
 
-            // Color-specific actionable recommendations
-            if (data.actionable_recommendations && data.actionable_recommendations.length > 0) {
+            // Color-specific actionable recommendations (from API)
+            const apiRecs = data.accessibility?.actionable_recommendations || [];
+            if (apiRecs.length > 0) {
                 html += `
                     <div class="card" style="grid-column: 1 / -1;">
-                        <h3>🎯 Specific Color Fixes</h3>
+                        <h3>🎯 Specific Color Fixes Required</h3>
                         <div class="recommendations">
-                            ${data.actionable_recommendations.map(rec => {
-                                return `<div class="recommendation-item warning">💡 ${rec.color}: ${rec.recommendation}</div>`;
+                            ${apiRecs.map(rec => {
+                                return `<div class="recommendation-item warning">💡 <strong>${rec.color}</strong>: ${rec.recommendation}</div>`;
                             }).join('')}
+                        </div>
+                    </div>
+                `;
+            } else if (scores.accessibility >= 90) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <h3>🎯 Color Accessibility Status</h3>
+                        <div class="recommendations">
+                            <div class="recommendation-item">✨ <strong>No color fixes needed!</strong> All colors meet WCAG standards for accessibility.</div>
                         </div>
                     </div>
                 `;
