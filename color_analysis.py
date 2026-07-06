@@ -649,6 +649,7 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
     scores = []
     weights = []
     recommendations = []
+    failed_colors = []
 
     for color in colors:
         try:
@@ -664,10 +665,18 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
                 best_text = "#FFFFFF"
                 levels = wcag_levels(ratio_white)
 
+            # Determine accessibility status
+            wcag_status = levels["label"]
+            is_aaa = levels["aaa_normal"]
+            is_aa = levels["aa_normal"]
+            is_accessible = is_aa or is_aaa
+
             pair = {
                 "color_1": color,
                 "color_2": best_text,
                 "contrast_ratio": round(best_ratio, 2),
+                "wcag_status": wcag_status,
+                "is_accessible": is_accessible,
                 **levels,
             }
             pairs.append(pair)
@@ -688,12 +697,21 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
             combined_weight = coverage_weight * wcag_weight
             weights.append(combined_weight)
 
+            # Track failures
+            if not is_accessible:
+                failed_colors.append({
+                    "color": color,
+                    "ratio": round(best_ratio, 2),
+                    "need": round(4.5 - best_ratio, 2) if best_ratio < 4.5 else 0
+                })
+
             rec = generate_color_recommendation(color, best_ratio)
             if rec:
                 recommendations.append({"color": color, "recommendation": rec})
 
         except ValueError as exc:
             pairs.append({"color_1": color, "color_2": "N/A", "error": str(exc)})
+            failed_colors.append({"color": color, "error": str(exc)})
 
     if scores:
         if weights and sum(weights) > 0:
@@ -706,12 +724,17 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
 
     aa_passes = sum(1 for p in pairs if p.get("aa_normal", False))
     aaa_passes = sum(1 for p in pairs if p.get("aaa_normal", False))
+    total_colors = len([p for p in pairs if "error" not in p])
+    fail_rate = len(failed_colors) / max(total_colors, 1)
 
     return {
         "evaluations": pairs,
-        "total_colors": len([p for p in pairs if "error" not in p]),
+        "total_colors": total_colors,
         "aa_passing_pairs": aa_passes,
         "aaa_passing_pairs": aaa_passes,
+        "failing_colors_count": len(failed_colors),
+        "failing_colors": failed_colors[:5],  # Top 5 most critical failures
+        "failure_rate": round(fail_rate, 2),
         "accessibility_score": accessibility_score,
         "score_label": _score_label(accessibility_score),
         "actionable_recommendations": recommendations,
@@ -719,7 +742,7 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
 
 
 def _score_label(score: float) -> str:
-    """Refined labels."""
+    """Refined labels with accessibility guidance."""
     if score >= 95:
         return "Excellent – Fully accessible"
     elif score >= 80:
@@ -732,6 +755,52 @@ def _score_label(score: float) -> str:
         return "Very Poor – Barriers for colorblind users"
     else:
         return "Critical – Redesign required"
+
+
+def assess_palette_accessibility(hex_colors: list[str], coverage: dict[str, dict] | None = None) -> dict:
+    """
+    High-level palette assessment combining all metrics.
+    Returns unified evaluation with confidence and recommendations.
+    """
+    if not hex_colors:
+        return {"error": "No colors provided"}
+
+    scheme = detect_color_scheme(hex_colors, coverage)
+    accessibility = evaluate_color_accessibility(hex_colors, coverage)
+
+    # Determine dominant color type
+    chromatic_count = scheme["chromatic_count"]
+    achromatic_count = scheme["achromatic_count"]
+    total = chromatic_count + achromatic_count
+    chromatic_pct = (chromatic_count / total * 100) if total > 0 else 0
+
+    dominant_type = "Primarily Neutral" if chromatic_pct < 30 else "Mixed" if chromatic_pct < 70 else "Primarily Chromatic"
+
+    # Overall recommendations
+    recommendations = []
+    score = accessibility["accessibility_score"]
+
+    if score < 50:
+        recommendations.append("🔴 Critical: Increase contrast between foreground and background colors")
+    if score < 65:
+        recommendations.append("🟡 Consider: Add more contrast for users with color blindness")
+    if accessibility["failing_colors_count"] > 0:
+        recommendations.append(f"🔧 Fix: {accessibility['failing_colors_count']} color(s) need adjustment")
+    if chromatic_pct > 70 and scheme["harmony_score"] < 60:
+        recommendations.append("💡 Tip: Consider using complementary or analogous hues for better harmony")
+    if chromatic_pct < 30:
+        recommendations.append("✓ Good: Neutral palette simplifies accessibility")
+
+    return {
+        "color_scheme": scheme,
+        "accessibility": accessibility,
+        "palette_type": dominant_type,
+        "chromatic_percentage": round(chromatic_pct, 1),
+        "overall_score": accessibility["accessibility_score"],
+        "overall_label": accessibility["score_label"],
+        "unified_recommendations": recommendations,
+        "colors_to_fix": accessibility.get("failing_colors", []),
+    }
 
 
 def evaluate_against_black_and_white(hex_color: str) -> dict:
