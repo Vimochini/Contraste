@@ -431,7 +431,7 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
             weights.append(weight)
 
             # Actionable recommendation
-            rec = generate_color_recommendation(color, best_ratio, levels["label"])
+            rec = generate_color_recommendation(color, best_ratio)
             if rec:
                 recommendations.append({"color": color, "recommendation": rec})
 
