@@ -925,29 +925,59 @@
             // Accessibility Details
             if (data.accessibility) {
                 const wcagStats = getWCAGStats(data.accessibility);
+                const failureRate = data.accessibility.failure_rate || 0;
+                const failurePercent = (failureRate * 100).toFixed(1);
+                const failingCount = data.accessibility.failing_colors_count || 0;
+
                 html += `
                     <div class="card">
                         <h3>WCAG Compliance</h3>
                         <div class="metrics-grid">
                             <div class="metric-item">
                                 <div class="metric-label">AAA Compliant</div>
-                                <div class="metric-value">${wcagStats.aaa}</div>
+                                <div class="metric-value">${data.accessibility.aaa_passing_pairs || wcagStats.aaa}</div>
                             </div>
                             <div class="metric-item">
                                 <div class="metric-label">AA Compliant</div>
-                                <div class="metric-value">${wcagStats.aa}</div>
+                                <div class="metric-value">${data.accessibility.aa_passing_pairs || wcagStats.aa}</div>
                             </div>
                             <div class="metric-item">
-                                <div class="metric-label">Failing Pairs</div>
-                                <div class="metric-value" style="color: var(--danger);">${wcagStats.failing}</div>
+                                <div class="metric-label">Failing Colors</div>
+                                <div class="metric-value" style="color: var(--danger);">${failingCount}</div>
                             </div>
                             <div class="metric-item">
-                                <div class="metric-label">Total Pairs</div>
-                                <div class="metric-value">${data.accessibility.total_pairs || 0}</div>
+                                <div class="metric-label">Failure Rate</div>
+                                <div class="metric-value" style="color: var(--danger);">${failurePercent}%</div>
                             </div>
                         </div>
                     </div>
                 `;
+
+                // Show failing colors if any
+                if (data.accessibility.failing_colors && data.accessibility.failing_colors.length > 0) {
+                    html += `
+                        <div class="card" style="grid-column: 1 / -1; border-left: 4px solid var(--danger);">
+                            <h3>⚠️ Colors Failing WCAG AA (4.5:1 Ratio)</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                                ${data.accessibility.failing_colors.slice(0, 5).map(fc => {
+                                    if (fc.error) {
+                                        return `<div style="padding: 8px; background: var(--light); border-radius: 4px; font-size: 12px;">❌ ${fc.color}: ${fc.error}</div>`;
+                                    }
+                                    return `
+                                        <div style="padding: 12px; background: var(--light); border-radius: 4px;">
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                                <div style="width: 30px; height: 30px; background: ${fc.color}; border-radius: 4px; border: 1px solid var(--border);"></div>
+                                                <span style="font-weight: 600; font-size: 13px;">${fc.color}</span>
+                                            </div>
+                                            <div style="font-size: 12px; color: var(--text-light);">Ratio: <strong>${fc.ratio}:1</strong></div>
+                                            ${fc.need ? `<div style="font-size: 12px; color: var(--danger);">Need +${fc.need} more</div>` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
             }
 
             // Smart Recommendations
@@ -1019,38 +1049,38 @@
         }
 
         function calculateParameterScores(data) {
-            const pairs = data.accessibility?.pairs || [];
-            const totalPairs = data.accessibility?.total_pairs || 1;
+            const pairs = data.accessibility?.pairs || data.accessibility?.evaluations || [];
+            const totalPairs = data.accessibility?.total_pairs || data.accessibility?.total_colors || Math.max(pairs.length, 1);
 
-            // 1. Accessibility Score (0-100)
+            // 1. Accessibility Score (0-100) - from v6.0 weighted algorithm
             const accessibilityScore = data.accessibility?.accessibility_score || 0;
 
             // 2. Color Quality Score based on scheme harmony (0-100)
-            const colorQualityScore = Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
+            const colorQualityScore = data.color_scheme?.harmony_score || Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
 
             // 3. WCAG AA Compliance (0-100)
             const aaPassingPairs = data.accessibility?.aa_passing_pairs || 0;
             const aaScore = (aaPassingPairs / totalPairs) * 100;
 
             // 4. WCAG AAA Compliance (0-100)
-            const aaaPassingPairs = pairs.filter(p => p.aaa_normal).length;
+            const aaaPassingPairs = data.accessibility?.aaa_passing_pairs || pairs.filter(p => p.aaa_normal).length;
             const aaaScore = (aaaPassingPairs / totalPairs) * 100;
 
-            // 5. Failing Pairs Ratio (0-100) - inverse score
-            const failingPairs = pairs.filter(p => p.label === 'FAIL').length;
-            const failingScore = 100 - ((failingPairs / totalPairs) * 100);
+            // 5. Color Reliability (0-100) - inverse of failure rate
+            const failureRate = data.accessibility?.failure_rate || (pairs.filter(p => p.wcag_status === 'FAIL' || !p.is_accessible).length / totalPairs);
+            const reliabilityScore = 100 - (failureRate * 100);
 
             // 6. Color Extraction Quality (0-100)
             const colorsFound = data.total_colors_found || 0;
             const extractionScore = Math.min(100, (colorsFound / 12) * 100);
 
-            // 7. Palette Diversity (0-100) - based on hue distance
-            const hueDist = data.color_scheme?.max_hue_distance_deg || 0;
-            const diversityScore = Math.min(100, (hueDist / 360) * 100);
+            // 7. Palette Diversity (0-100) - from v6.0 metric
+            const paletteDiv = data.color_scheme?.palette_diversity || 0;
+            const diversityScore = Math.min(100, paletteDiv * 100);
 
             // 8. Average Contrast Ratio Score
             const avgContrastRatio = pairs.length > 0
-                ? pairs.reduce((sum, p) => sum + Math.min(p.contrast_ratio, 21), 0) / pairs.length / 21 * 100
+                ? pairs.filter(p => !p.error).reduce((sum, p) => sum + Math.min(p.contrast_ratio || 0, 21), 0) / pairs.length / 21 * 100
                 : 0;
 
             return {
@@ -1058,7 +1088,7 @@
                 colorQuality: colorQualityScore,
                 wcagAA: aaScore,
                 wcagAAA: aaaScore,
-                failingPairs: failingScore,
+                failingPairs: reliabilityScore,
                 extraction: extractionScore,
                 diversity: diversityScore,
                 avgContrast: avgContrastRatio
@@ -1251,11 +1281,23 @@
                 });
             }
 
+            // Actionable color-specific recommendations from API (v6.0)
+            const actionableRecs = data.accessibility?.actionable_recommendations || [];
+            if (actionableRecs.length > 0) {
+                actionableRecs.slice(0, 3).forEach(rec => {
+                    recommendations.push({
+                        text: `💡 ${rec.recommendation}`,
+                        severity: '',
+                        icon: '🔧'
+                    });
+                });
+            }
+
             // Palette improvement suggestions
             if (data.palette_suggestions && data.palette_suggestions.length > 0) {
                 const topColor = data.palette_suggestions[0];
                 recommendations.push({
-                    text: `💡 Primary color ${topColor.color} achieves best contrast with ${topColor.recommended_text} (ratio: ${topColor.best_ratio.toFixed(1)}, ${topColor.best_wcag})`,
+                    text: `Primary color ${topColor.color} achieves best contrast with ${topColor.recommended_text} (ratio: ${topColor.best_ratio.toFixed(1)}, ${topColor.best_wcag})`,
                     severity: '',
                     icon: '💡'
                 });
