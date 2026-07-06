@@ -496,6 +496,23 @@ def _accessibility_score_scurve(ratio: float) -> float:
         return min(100, 95 + ((ratio - 7.0) / 14) * 5)
 
 
+def _wcag_importance_weight(ratio: float) -> float:
+    """
+    Weight factor based on WCAG compliance level.
+    AA Normal (4.5) is baseline (1.0x).
+    AAA (7.0) is premium (1.3x).
+    Large (3.0) is less stringent (0.7x).
+    """
+    if ratio >= 7.0:
+        return 1.3  # AAA – premium credit
+    elif ratio >= 4.5:
+        return 1.0  # AA Normal – baseline
+    elif ratio >= 3.0:
+        return 0.7  # AA Large – less stringent
+    else:
+        return 0.3  # Below AA Large – critical
+
+
 def _suggest_replacement_color(color: str, ratio: float, target_ratio: float = 4.5) -> str | None:
     """
     Generate exact replacement color to achieve target contrast.
@@ -621,7 +638,13 @@ def generate_color_recommendation(color: str, ratio: float) -> str | None:
 
 
 def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | None = None) -> dict:
-    """Evaluate colors with S-curve scoring and replacement suggestions."""
+    """
+    Evaluate colors with S-curve scoring, WCAG importance weighting, and replacement suggestions.
+
+    Weighting factors:
+    - Coverage: colors used more frequently have higher impact
+    - WCAG Level: AAA (7.0+) gets 1.3x, AA (4.5+) gets 1.0x, AA-Large (3.0+) gets 0.7x
+    """
     pairs = []
     scores = []
     weights = []
@@ -649,16 +672,21 @@ def evaluate_color_accessibility(colors: list[str], coverage: dict[str, dict] | 
             }
             pairs.append(pair)
 
+            # S-curve score
             score = _accessibility_score_scurve(best_ratio)
             scores.append(score)
 
-            weight = 1.0
+            # Combined weight: coverage × WCAG importance
+            coverage_weight = 1.0
             if coverage and color in coverage:
                 cov = coverage[color]["coverage"]
                 if cov < MIN_COVERAGE:
                     continue
-                weight = cov / 100.0
-            weights.append(weight)
+                coverage_weight = cov / 100.0
+
+            wcag_weight = _wcag_importance_weight(best_ratio)
+            combined_weight = coverage_weight * wcag_weight
+            weights.append(combined_weight)
 
             rec = generate_color_recommendation(color, best_ratio)
             if rec:
@@ -745,3 +773,66 @@ def suggest_palette(hex_colors: list[str]) -> list[dict]:
         if "error" not in result:
             suggestions.append(result)
     return suggestions
+
+
+def validate_against_benchmarks(benchmark_sites: dict) -> dict:
+    """
+    Validate algorithm against benchmark sites.
+
+    benchmark_sites format:
+    {
+        "site_name": {
+            "colors": ["#FF0000", ...],
+            "expected_score": 85,
+            "expected_scheme": "Complementary"
+        }
+    }
+
+    Returns calibration report with errors and confidence metrics.
+    """
+    results = {}
+
+    for site_name, benchmark in benchmark_sites.items():
+        colors = benchmark.get("colors", [])
+        expected_score = benchmark.get("expected_score", 50)
+        expected_scheme = benchmark.get("expected_scheme", "")
+
+        if not colors:
+            continue
+
+        accessibility = evaluate_color_accessibility(colors)
+        scheme = detect_color_scheme(colors)
+
+        actual_score = accessibility["accessibility_score"]
+        actual_scheme = scheme["scheme"]
+
+        score_error = abs(actual_score - expected_score)
+        scheme_match = actual_scheme == expected_scheme if expected_scheme else True
+
+        results[site_name] = {
+            "expected_score": expected_score,
+            "actual_score": actual_score,
+            "error": round(score_error, 1),
+            "error_percent": round((score_error / max(expected_score, 1)) * 100, 1),
+            "expected_scheme": expected_scheme or "Any",
+            "actual_scheme": actual_scheme,
+            "scheme_match": scheme_match,
+            "status": "PASS" if score_error < 15 and scheme_match else "WARN" if score_error < 25 else "FAIL",
+        }
+
+    # Summary statistics
+    all_errors = [r["error"] for r in results.values()]
+    mean_error = sum(all_errors) / len(all_errors) if all_errors else 0
+    max_error = max(all_errors) if all_errors else 0
+    passes = sum(1 for r in results.values() if r["status"] == "PASS")
+
+    return {
+        "benchmark_results": results,
+        "summary": {
+            "total_benchmarks": len(results),
+            "passes": passes,
+            "mean_error": round(mean_error, 1),
+            "max_error": round(max_error, 1),
+            "confidence": round(100 - (mean_error / 25) * 100, 1),  # Normalize to 0-100
+        },
+    }
