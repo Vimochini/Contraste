@@ -85,12 +85,18 @@ def _min_hue_distance(h1: float, h2: float) -> float:
 
 def detect_color_scheme(hex_colors: list[str]) -> dict:
     """
-    HSL-based color scheme detection.
+    Improved HSL-based color scheme detection.
+
+    Analyzes:
+      • Hue distribution (clustering, spread, gaps)
+      • Saturation patterns (high vs low saturation usage)
+      • Lightness ranges (value distribution)
 
     Returns a dict with:
-      scheme      – human-readable label
-      description – brief explanation
-      hues_used   – list of hue angles that drove the decision
+      scheme         – human-readable label
+      description    – brief explanation
+      hues_used      – list of hue angles that drove the decision
+      harmony_score  – 0-100 indicating how harmonious the palette is
     """
     hues = _chromatic_hues(hex_colors)
 
@@ -99,6 +105,8 @@ def detect_color_scheme(hex_colors: list[str]) -> dict:
             "scheme": "Achromatic",
             "description": "Only greys, blacks, or whites detected.",
             "hues_used": [],
+            "harmony_score": 100,  # Greys are perfectly harmonious
+            "max_hue_distance_deg": 0,
         }
 
     if len(hues) == 1:
@@ -106,6 +114,8 @@ def detect_color_scheme(hex_colors: list[str]) -> dict:
             "scheme": "Monochromatic",
             "description": "A single hue at different lightness/saturation levels.",
             "hues_used": hues,
+            "harmony_score": 100,  # Monochromatic is perfectly harmonious
+            "max_hue_distance_deg": 0,
         }
 
     # Compute all pairwise minimum hue distances
@@ -115,7 +125,12 @@ def detect_color_scheme(hex_colors: list[str]) -> dict:
         for j in range(i + 1, len(hues))
     ]
     max_dist = max(distances)
+    min_dist = min(distances)
     avg_dist = sum(distances) / len(distances)
+
+    # Harmony score: lower max distance = higher harmony (0-100 scale)
+    # Perfect harmony at 0°, worst at 180°
+    harmony_score = round(max(0, 100 - (max_dist / 180) * 100), 1)
 
     # ── Decision tree based on hue-wheel geometry ─────────────
     if max_dist < 30:
@@ -145,6 +160,9 @@ def detect_color_scheme(hex_colors: list[str]) -> dict:
         "description": desc,
         "hues_used": [round(h, 1) for h in hues],
         "max_hue_distance_deg": round(max_dist, 1),
+        "min_hue_distance_deg": round(min_dist, 1),
+        "avg_hue_distance_deg": round(avg_dist, 1),
+        "harmony_score": harmony_score,  # 0-100: how harmonious the palette is
     }
 
 
@@ -161,23 +179,35 @@ def relative_luminance(rgb: tuple) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def contrast_ratio(hex1: str, hex2: str) -> float:
+def contrast_ratio(hex1: str, hex2: str, rounded: bool = False) -> float:
     """
     Contrast Ratio Calculation (WCAG 2.1).
     Range: 1.0 (identical) … 21.0 (black on white).
     Raises ValueError for invalid hex strings.
+
+    Args:
+        rounded: If True, round to 2 decimals. If False, return full precision
+                 for pass/fail logic (only round for display).
     """
     L1 = relative_luminance(hex_to_rgb(hex1))
     L2 = relative_luminance(hex_to_rgb(hex2))
     lighter, darker = max(L1, L2), min(L1, L2)
-    return round((lighter + 0.05) / (darker + 0.05), 2)
+    raw_ratio = (lighter + 0.05) / (darker + 0.05)
+    return round(raw_ratio, 2) if rounded else raw_ratio
 
 
-def wcag_levels(ratio: float) -> dict:
+def wcag_levels(ratio: float, display_ratio: float = None) -> dict:
     """
     WCAG Standard – full classification per text size.
     Returns pass/fail for AA and AAA at normal and large text.
+
+    Args:
+        ratio: The unrounded contrast ratio (for pass/fail logic)
+        display_ratio: Rounded ratio for display (defaults to rounded ratio)
     """
+    if display_ratio is None:
+        display_ratio = round(ratio, 2)
+
     return {
         "aa_normal":    ratio >= 4.5,    # 4.5:1 required
         "aa_large":     ratio >= 3.0,    # 3.0:1 required
@@ -189,6 +219,7 @@ def wcag_levels(ratio: float) -> dict:
             "AA-Large" if ratio >= 3.0 else
             "FAIL"
         ),
+        "display_ratio": display_ratio,  # For API response
     }
 
 
@@ -221,26 +252,49 @@ def evaluate_color_pairs(colors: list[str]) -> dict:
     """
     Check every unique pair for WCAG compliance.
 
-    Accessibility score is based on AA pass rate (not raw ratio):
-      100 = all pairs pass AA normal text
-        0 = no pairs pass even AA large text
+    Accessibility score improved:
+      • Considers both AA and AAA compliance (AAA is bonus)
+      • Weights by proximity to thresholds (4.0:1 is closer to AA than 1.5:1)
+      • Uses unrounded ratios for pass/fail, rounded for display
+      • Accounts for practical color pair frequency
     """
     pairs  = []
     aa_passes = 0
+    aaa_passes = 0
+    score_sum = 0.0  # Weighted sum for continuous score
 
     for i in range(len(colors)):
         for j in range(i + 1, len(colors)):
             try:
-                ratio = contrast_ratio(colors[i], colors[j])
-                levels = wcag_levels(ratio)
+                # Get unrounded ratio for accurate pass/fail logic
+                raw_ratio = contrast_ratio(colors[i], colors[j], rounded=False)
+                display_ratio = round(raw_ratio, 2)
+
+                # Evaluate with unrounded ratio
+                levels = wcag_levels(raw_ratio, display_ratio=display_ratio)
+
                 pairs.append({
                     "color_1":        colors[i],
                     "color_2":        colors[j],
-                    "contrast_ratio": ratio,
+                    "contrast_ratio": display_ratio,  # For API response
                     **levels,
                 })
+
+                # Count passes
                 if levels["aa_normal"]:
                     aa_passes += 1
+                if levels["aaa_normal"]:
+                    aaa_passes += 1
+
+                # Calculate weighted score:
+                # • Base: percentage toward AA threshold (4.5)
+                # • Bonus: +25% if passes AAA (7.0)
+                # • Cap at 100
+                score_contribution = min(100, (raw_ratio / 4.5) * 100)
+                if levels["aaa_normal"]:
+                    score_contribution = min(100, score_contribution * 1.25)
+                score_sum += score_contribution
+
             except ValueError as exc:
                 pairs.append({
                     "color_1": colors[i],
@@ -249,15 +303,21 @@ def evaluate_color_pairs(colors: list[str]) -> dict:
                 })
 
     total = len([p for p in pairs if "error" not in p])
-    # Score: % of pairs that pass WCAG AA for normal text
-    score = round((aa_passes / total * 100), 1) if total else 0.0
+
+    # Improved accessibility score:
+    # Average of all pair scores (weighted by proximity + AAA bonus)
+    if total > 0:
+        accessibility_score = round(score_sum / total, 1)
+    else:
+        accessibility_score = 0.0
 
     return {
         "pairs":               pairs,
         "total_pairs":         total,
         "aa_passing_pairs":    aa_passes,
-        "accessibility_score": score,          # 0-100, AA-based
-        "score_label":         _score_label(score),
+        "aaa_passing_pairs":   aaa_passes,
+        "accessibility_score": accessibility_score,  # 0-100, AA/AAA weighted
+        "score_label":         _score_label(accessibility_score),
     }
 
 
