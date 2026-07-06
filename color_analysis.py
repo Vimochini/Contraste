@@ -21,12 +21,46 @@ import math
 # ══════════════════════════════════════════════════════════════
 
 CLUSTER_RADIUS = 25.0
-DEDUP_THRESHOLD_LAB = 15.0          # ΔE Lab threshold (perceptually ~"just noticeable")
+DEDUP_THRESHOLD_LAB = 15.0          # ΔE Lab threshold (JND ~15 = "just noticeable difference")
 MIN_COVERAGE = 5.0
 SATURATION_MIN = 0.12
 LIGHTNESS_MIN = 0.12
 LIGHTNESS_MAX = 0.88
 ACHROMATIC_SAT = 0.05
+
+
+def _adaptive_thresholds(palette_size: int, palette_diversity: float | None = None) -> dict:
+    """
+    Calculate adaptive thresholds based on palette complexity.
+    - palette_size: number of colors
+    - palette_diversity: 0-1 measure of hue/saturation spread (optional)
+
+    Returns adjusted thresholds for dedup, clustering, coverage.
+    """
+    # More colors = less aggressive deduplication to preserve variety
+    dedup_threshold = DEDUP_THRESHOLD_LAB
+    if palette_size > 12:
+        dedup_threshold = max(10.0, DEDUP_THRESHOLD_LAB - 2.0)
+    elif palette_size < 4:
+        dedup_threshold = min(20.0, DEDUP_THRESHOLD_LAB + 3.0)
+
+    # More diverse = wider cluster radius (more tolerance for hue variation)
+    cluster_radius = CLUSTER_RADIUS
+    if palette_diversity and palette_diversity > 0.7:
+        cluster_radius = 35.0
+    elif palette_diversity and palette_diversity < 0.3:
+        cluster_radius = 15.0
+
+    # Tiny palettes: lower coverage threshold to include rare accents
+    min_coverage = MIN_COVERAGE
+    if palette_size <= 3:
+        min_coverage = 2.0
+
+    return {
+        "dedup_threshold": dedup_threshold,
+        "cluster_radius": cluster_radius,
+        "min_coverage": min_coverage,
+    }
 
 
 # ══════════════════════════════════════════════════════════════
@@ -343,7 +377,7 @@ def _detect_harmony_pattern(cluster_hues: list[float]) -> tuple[str, float]:
 
 
 def detect_color_scheme(hex_colors: list[str], coverage: dict[str, dict] | None = None) -> dict:
-    """Detect scheme using circular clustering and pattern matching."""
+    """Detect scheme using circular clustering and pattern matching with adaptive thresholds."""
     chromatic = [c for c in hex_colors if _is_chromatic(c)]
     achromatic = [c for c in hex_colors if _is_achromatic(c)]
 
@@ -362,8 +396,19 @@ def detect_color_scheme(hex_colors: list[str], coverage: dict[str, dict] | None 
             "achromatic_count": len(achromatic),
         }
 
-    # Circular clustering
-    clusters = _circular_hue_clustering(hues)
+    # Calculate palette diversity (hue spread / saturation range)
+    hue_values = [h for h, _ in hues]
+    if hue_values:
+        hue_spread = max(hue_values) - min(hue_values) if len(hue_values) > 1 else 0
+        palette_diversity = min(1.0, hue_spread / 180.0)  # normalize to 0-1
+    else:
+        palette_diversity = 0.0
+
+    # Get adaptive thresholds
+    adaptive = _adaptive_thresholds(len(chromatic), palette_diversity)
+
+    # Circular clustering with adaptive radius
+    clusters = _circular_hue_clustering(hues, cluster_radius=adaptive["cluster_radius"])
     cluster_hues = [c[0] for c in clusters]
 
     # Pattern matching
@@ -396,6 +441,7 @@ def detect_color_scheme(hex_colors: list[str], coverage: dict[str, dict] | None 
         "num_color_clusters": len(clusters),
         "chromatic_count": len(chromatic),
         "achromatic_count": len(achromatic),
+        "palette_diversity": round(palette_diversity, 2),
     }
 
 
@@ -453,6 +499,7 @@ def _accessibility_score_scurve(ratio: float) -> float:
 def _suggest_replacement_color(color: str, ratio: float, target_ratio: float = 4.5) -> str | None:
     """
     Generate exact replacement color to achieve target contrast.
+    Uses binary search to find optimal luminance, preserving original hue/saturation.
     Returns suggested hex color, or None if color is already good.
     """
     if ratio >= target_ratio:
@@ -460,39 +507,81 @@ def _suggest_replacement_color(color: str, ratio: float, target_ratio: float = 4
 
     try:
         r, g, b = hex_to_rgb(color)
-        luminance = relative_luminance((r, g, b))
+        h, s, l = rgb_to_hsl((r, g, b))
+        current_lum = relative_luminance((r, g, b))
 
         # Determine direction: lighten or darken
-        if luminance > 0.5:
-            # Too light – need to darken
-            target_l = (target_ratio * 0.05 - 0.05) / (target_ratio + 0.05)
-            factor = target_l / (luminance + 0.01)  # Prevent division by zero
-        else:
-            # Too dark – need to lighten
-            target_l = ((target_ratio + 0.05) * 0.05) - 0.05
-            factor = target_l / (luminance + 0.01)
+        lighten = current_lum < 0.5
 
-        # Adjust RGB by factor (naive adjustment)
-        factor = max(0.1, min(2.0, factor))  # Clamp between 0.1 and 2.0
+        # Binary search for optimal lightness in HSL
+        low, high = 0.0, 1.0
+        best_replacement = None
+        best_ratio = ratio
 
-        new_r = max(0, min(255, int(r * factor)))
-        new_g = max(0, min(255, int(g * factor)))
-        new_b = max(0, min(255, int(b * factor)))
+        for _ in range(20):  # ~20 iterations for precision
+            mid = (low + high) / 2
 
-        replacement = rgb_to_hex((new_r, new_g, new_b))
-        replacement_ratio = max(
-            contrast_ratio(replacement, "#FFFFFF"),
-            contrast_ratio(replacement, "#000000")
-        )
+            # Adjust only lightness, preserve hue/saturation
+            hsl_adjusted = (h, s, mid)
+            r_new, g_new, b_new = _hsl_to_rgb(hsl_adjusted)
+            test_color = rgb_to_hex((r_new, g_new, b_new))
 
-        # Only return if we actually improved contrast
-        if replacement_ratio >= target_ratio:
-            return replacement
+            # Test contrast
+            test_ratio = max(
+                contrast_ratio(test_color, "#FFFFFF"),
+                contrast_ratio(test_color, "#000000")
+            )
 
-    except ValueError:
+            if test_ratio >= target_ratio:
+                best_replacement = test_color
+                best_ratio = test_ratio
+                # Search on the direction away from original (to preserve color)
+                if lighten:
+                    high = mid
+                else:
+                    low = mid
+            else:
+                # Need to go further
+                if lighten:
+                    low = mid
+                else:
+                    high = mid
+
+        return best_replacement if best_replacement and best_ratio >= target_ratio else None
+
+    except (ValueError, TypeError):
         pass
 
     return None
+
+
+def _hsl_to_rgb(hsl: tuple) -> tuple[int, int, int]:
+    """Convert HSL (h [0,360), s,l [0,1]) to RGB (0-255)."""
+    h, s, l = hsl
+    h = h % 360
+
+    c = (1 - abs(2 * l - 1)) * s
+    x = c * (1 - abs((h / 60) % 2 - 1))
+    m = l - c / 2
+
+    if h < 60:
+        r, g, b = c, x, 0
+    elif h < 120:
+        r, g, b = x, c, 0
+    elif h < 180:
+        r, g, b = 0, c, x
+    elif h < 240:
+        r, g, b = 0, x, c
+    elif h < 300:
+        r, g, b = x, 0, c
+    else:
+        r, g, b = c, 0, x
+
+    return (
+        max(0, min(255, int((r + m) * 255))),
+        max(0, min(255, int((g + m) * 255))),
+        max(0, min(255, int((b + m) * 255)))
+    )
 
 
 def generate_color_recommendation(color: str, ratio: float) -> str | None:
