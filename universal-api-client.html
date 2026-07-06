@@ -810,8 +810,8 @@
                 </div>
             `;
 
-            // Overall Score Summary
-            const overallScore = (scores.accessibility + scores.wcagAA + scores.wcagAAA + scores.colorQuality + scores.avgContrast + scores.failingPairs + scores.extraction + scores.diversity) / 8;
+            // Overall Score Summary - ACCESSIBILITY METRICS ONLY
+            const overallScore = (scores.accessibility + scores.wcagAA + scores.wcagAAA) / 3;
             const overallLabel = getScoreLabel(overallScore);
             html += `
                 <div class="card" style="grid-column: 1 / -1;">
@@ -836,29 +836,58 @@
             `;
 
             const params = [
-                { name: 'Accessibility', score: scores.accessibility, icon: '♿' },
-                { name: 'WCAG AA Compliance', score: scores.wcagAA, icon: '✓' },
-                { name: 'WCAG AAA Compliance', score: scores.wcagAAA, icon: '★' },
-                { name: 'Color Quality', score: scores.colorQuality, icon: '🎨' },
-                { name: 'Contrast Ratio', score: scores.avgContrast, icon: '◐◑' },
-                { name: 'Failing Pairs Score', score: scores.failingPairs, icon: '⚠️' },
-                { name: 'Color Extraction', score: scores.extraction, icon: '🔍' },
-                { name: 'Palette Diversity', score: scores.diversity, icon: '🌈' }
+                { name: 'Accessibility Score', score: scores.accessibility, icon: '♿', unit: '/100' },
+                { name: 'WCAG AA Pass Rate', score: scores.wcagAA, icon: '✓', unit: '%' },
+                { name: 'WCAG AAA Pass Rate', score: scores.wcagAAA, icon: '★', unit: '%' },
+                { name: 'Avg Contrast Ratio', score: scores.avgContrast, icon: '◐◑', unit: ':1', isRatio: true },
+                { name: 'Color Harmony', score: scores.harmony, icon: '🎨', unit: '/100' },
+                { name: 'Color Variety', score: scores.colorVariety, icon: '🌈', unit: 'colors', isInfo: true },
+                { name: 'Extraction Quality', score: scores.extractionQuality, icon: '🔍', unit: '%', isInfo: true },
+                { name: 'Color Representation', score: scores.colorRepresentation, icon: '📊', unit: '%', isInfo: true }
             ];
 
             params.forEach(p => {
-                const label = getScoreLabel(p.score);
-                const color = getScoreColor(p.score);
-                html += `
-                    <div class="metric-item" style="border-left: 4px solid ${color};">
-                        <div class="metric-label">${p.icon} ${p.name}</div>
-                        <div class="metric-value" style="color: ${color};">${p.score.toFixed(1)}</div>
-                        <div class="progress-bar" style="margin-top: 8px;">
-                            <div class="progress-fill" style="width: ${p.score}%; background: ${color};"></div>
+                // For informational metrics, show different styling
+                if (p.isInfo) {
+                    html += `
+                        <div class="metric-item" style="border-left: 4px solid var(--primary); opacity: 0.8;">
+                            <div class="metric-label">${p.icon} ${p.name}</div>
+                            <div class="metric-value" style="color: var(--primary);">${p.score.toFixed(1)}${p.unit}</div>
+                            <div class="progress-bar" style="margin-top: 8px;">
+                                <div class="progress-fill" style="width: ${Math.min(p.score, 100)}%; background: var(--primary);"></div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">ℹ️ Informational</div>
                         </div>
-                        <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${label}</div>
-                    </div>
-                `;
+                    `;
+                } else if (p.isRatio) {
+                    // Contrast ratio uses different scale (1.0-21.0)
+                    const ratioPercent = Math.min((p.score / 21) * 100, 100);
+                    const ratioColor = getScoreColor(Math.min(p.score * 14, 100)); // Map ratio to score for color
+                    html += `
+                        <div class="metric-item" style="border-left: 4px solid ${ratioColor};">
+                            <div class="metric-label">${p.icon} ${p.name}</div>
+                            <div class="metric-value" style="color: ${ratioColor};">${p.score.toFixed(2)}${p.unit}</div>
+                            <div class="progress-bar" style="margin-top: 8px;">
+                                <div class="progress-fill" style="width: ${ratioPercent}%; background: ${ratioColor};"></div>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${p.score >= 7.0 ? 'AAA' : p.score >= 4.5 ? 'AA' : p.score >= 3.0 ? 'AA-Large' : 'Low'}</div>
+                        </div>
+                    `;
+                } else {
+                    // Regular 0-100 metrics
+                    const label = getScoreLabel(p.score);
+                    const color = getScoreColor(p.score);
+                    html += `
+                        <div class="metric-item" style="border-left: 4px solid ${color};">
+                            <div class="metric-label">${p.icon} ${p.name}</div>
+                            <div class="metric-value" style="color: ${color};">${p.score.toFixed(1)}${p.unit}</div>
+                            <div class="progress-bar" style="margin-top: 8px;">
+                                <div class="progress-fill" style="width: ${p.score}%; background: ${color};"></div>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${label}</div>
+                        </div>
+                    `;
+                }
             });
 
             html += `
@@ -905,18 +934,45 @@
                 `;
             }
 
-            // Extracted Colors
+            // Extracted Colors with WCAG Info
             if (data.extracted_colors && data.extracted_colors.length > 0) {
+                // Build lookup map of colors to their accessibility info
+                const accessibilityMap = {};
+                if (data.accessibility?.pairs) {
+                    data.accessibility.pairs.forEach(pair => {
+                        if (pair.color_1) {
+                            accessibilityMap[pair.color_1.toUpperCase()] = {
+                                ratio: pair.contrast_ratio,
+                                wcagStatus: pair.wcag_status,
+                                isAccessible: pair.is_accessible
+                            };
+                        }
+                    });
+                }
+
                 html += `
                     <div class="card">
                         <h3>Extracted Colors (${data.total_colors_found})</h3>
-                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${data.extracted_colors.map(color => `
-                                <div style="display: flex; flex-direction: column; align-items: center;">
-                                    <div style="width: 40px; height: 40px; background: ${color}; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;" title="${color}"></div>
-                                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${color}</div>
-                                </div>
-                            `).join('')}
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px;">
+                            ${data.extracted_colors.map(color => {
+                                const wcagInfo = accessibilityMap[color.toUpperCase()];
+                                const statusBg = wcagInfo?.isAccessible ? 'var(--success)' : 'var(--danger)';
+                                const statusIcon = wcagInfo?.wcagStatus === 'AAA' ? '★' : wcagInfo?.wcagStatus === 'AA' ? '✓' : '✗';
+                                return `
+                                    <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: var(--light); border-radius: 6px;">
+                                        <div style="width: 50px; height: 50px; background: ${color}; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 6px;"></div>
+                                        <div style="font-size: 10px; color: var(--text-light); margin-bottom: 4px;">${color}</div>
+                                        ${wcagInfo ? `
+                                            <div style="font-size: 9px; color: ${statusBg}; font-weight: 700;">
+                                                ${statusIcon} ${wcagInfo.wcagStatus}
+                                            </div>
+                                            <div style="font-size: 9px; color: var(--text-light);">
+                                                ${wcagInfo.ratio.toFixed(2)}:1
+                                            </div>
+                                        ` : '<div style="font-size: 9px; color: var(--text-light);">No data</div>'}
+                                    </div>
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
@@ -1052,46 +1108,55 @@
             const pairs = data.accessibility?.pairs || data.accessibility?.evaluations || [];
             const totalPairs = data.accessibility?.total_pairs || data.accessibility?.total_colors || Math.max(pairs.length, 1);
 
-            // 1. Accessibility Score (0-100) - from v6.0 weighted algorithm
+            // ACCESSIBILITY METRICS (0-100 scale)
+            // 1. Accessibility Score - weighted WCAG + coverage (from v6.0)
             const accessibilityScore = data.accessibility?.accessibility_score || 0;
 
-            // 2. Color Quality Score based on scheme harmony (0-100)
-            const colorQualityScore = data.color_scheme?.harmony_score || Math.min(100, Math.max(0, 100 - (data.color_scheme?.max_hue_distance_deg || 0) * 2));
-
-            // 3. WCAG AA Compliance (0-100)
+            // 2. WCAG AA Compliance Rate (0-100)
             const aaPassingPairs = data.accessibility?.aa_passing_pairs || 0;
-            const aaScore = (aaPassingPairs / totalPairs) * 100;
+            const aaPassRate = totalPairs > 0 ? (aaPassingPairs / totalPairs) * 100 : 0;
 
-            // 4. WCAG AAA Compliance (0-100)
-            const aaaPassingPairs = data.accessibility?.aaa_passing_pairs || pairs.filter(p => p.aaa_normal).length;
-            const aaaScore = (aaaPassingPairs / totalPairs) * 100;
+            // 3. WCAG AAA Compliance Rate (0-100)
+            const aaaPassingPairs = data.accessibility?.aaa_passing_pairs || 0;
+            const aaaPassRate = totalPairs > 0 ? (aaaPassingPairs / totalPairs) * 100 : 0;
 
-            // 5. Color Reliability (0-100) - inverse of failure rate
-            const failureRate = data.accessibility?.failure_rate || (pairs.filter(p => p.wcag_status === 'FAIL' || !p.is_accessible).length / totalPairs);
-            const reliabilityScore = 100 - (failureRate * 100);
+            // QUALITY METRICS
+            // 4. Average Contrast Ratio (actual 1.0-21.0 scale, not normalized)
+            const validPairs = pairs.filter(p => !p.error && p.contrast_ratio);
+            const avgContrastRatioValue = validPairs.length > 0
+                ? validPairs.reduce((sum, p) => sum + (p.contrast_ratio || 0), 0) / validPairs.length
+                : 1.0;
 
-            // 6. Color Extraction Quality (0-100)
-            const colorsFound = data.total_colors_found || 0;
-            const extractionScore = Math.min(100, (colorsFound / 12) * 100);
+            // 5. Harmony Score - scheme match confidence (0-100)
+            const harmonyScore = data.color_scheme?.harmony_score || 0;
 
-            // 7. Palette Diversity (0-100) - from v6.0 metric
-            const paletteDiv = data.color_scheme?.palette_diversity || 0;
-            const diversityScore = Math.min(100, paletteDiv * 100);
+            // INFORMATIONAL METRICS
+            // 6. Color Variety - unique color count and distribution (informational)
+            const uniqueColors = data.total_colors_found || 0;
+            const colorVariety = Math.min(100, (uniqueColors / 10) * 100); // Scale: 10 colors = 100
 
-            // 8. Average Contrast Ratio Score
-            const avgContrastRatio = pairs.length > 0
-                ? pairs.filter(p => !p.error).reduce((sum, p) => sum + Math.min(p.contrast_ratio || 0, 21), 0) / pairs.length / 21 * 100
-                : 0;
+            // 7. Extraction Quality - based on color count and diversity
+            const chromatic = data.color_scheme?.chromatic_count || 0;
+            const extractionQuality = Math.min(100, (chromatic / 8) * 100); // Scale: 8 chromatic colors = 100
+
+            // 8. Color Representation - coverage metric (0-100)
+            // Use palette diversity as proxy for coverage distribution
+            const colorRepresentation = data.color_scheme?.palette_diversity
+                ? Math.min(100, data.color_scheme.palette_diversity * 100)
+                : (uniqueColors > 0 ? 50 : 0); // Default mid-range if colors exist
 
             return {
+                // Accessibility (primary metrics)
                 accessibility: accessibilityScore,
-                colorQuality: colorQualityScore,
-                wcagAA: aaScore,
-                wcagAAA: aaaScore,
-                failingPairs: reliabilityScore,
-                extraction: extractionScore,
-                diversity: diversityScore,
-                avgContrast: avgContrastRatio
+                wcagAA: aaPassRate,
+                wcagAAA: aaaPassRate,
+                // Quality metrics
+                avgContrast: avgContrastRatioValue,  // ACTUAL RATIO, not 0-100
+                harmony: harmonyScore,
+                // Informational metrics
+                colorVariety: colorVariety,
+                extractionQuality: extractionQuality,
+                colorRepresentation: colorRepresentation
             };
         }
 
@@ -1125,7 +1190,7 @@
         function generateRecommendations(scores, data) {
             const recommendations = [];
 
-            // 1. Accessibility score
+            // 1. Accessibility Score (primary metric)
             if (scores.accessibility < 40) {
                 recommendations.push({
                     text: '🔴 CRITICAL: Overall accessibility is very poor. Immediate redesign of color palette needed.',
@@ -1152,16 +1217,16 @@
                 });
             }
 
-            // 2. WCAG AA Compliance
+            // 2. WCAG AA Compliance Rate
             if (scores.wcagAA < 50) {
                 recommendations.push({
-                    text: 'Only ~' + scores.wcagAA.toFixed(0) + '% of color pairs meet WCAG AA. Prioritize high-contrast combinations.',
+                    text: 'Only ' + scores.wcagAA.toFixed(0) + '% of colors meet WCAG AA. Prioritize increasing contrast.',
                     severity: 'danger',
                     icon: '✓'
                 });
             } else if (scores.wcagAA < 80) {
                 recommendations.push({
-                    text: 'WCAG AA compliance at ' + scores.wcagAA.toFixed(0) + '%. Boost compliance by refining problematic pairs.',
+                    text: 'WCAG AA compliance at ' + scores.wcagAA.toFixed(0) + '%. Improve contrast for remaining colors.',
                     severity: 'warning',
                     icon: '⚡'
                 });
@@ -1173,111 +1238,87 @@
                 });
             }
 
-            // 3. WCAG AAA Compliance
-            if (scores.wcagAAA < 30) {
+            // 3. WCAG AAA Compliance Rate
+            if (scores.wcagAAA > 70) {
                 recommendations.push({
-                    text: 'Low AAA compliance. Consider dedicated high-contrast mode for accessibility.',
+                    text: 'Excellent AAA compliance (' + scores.wcagAAA.toFixed(0) + '%+). Supports enhanced contrast requirements.',
+                    severity: '',
+                    icon: '★'
+                });
+            } else if (scores.wcagAAA > 30) {
+                recommendations.push({
+                    text: 'Moderate AAA compliance (' + scores.wcagAAA.toFixed(0) + '%). Consider high-contrast mode for accessibility.',
                     severity: 'warning',
                     icon: '★'
                 });
-            } else if (scores.wcagAAA > 70) {
-                recommendations.push({
-                    text: 'Excellent AAA compliance. Supports enhanced contrast requirements.',
-                    severity: '',
-                    icon: '✅'
-                });
             }
 
-            // 4. Color Quality/Harmony
-            if (scores.colorQuality < 40) {
+            // 4. Average Contrast Ratio
+            if (scores.avgContrast < 3.0) {
                 recommendations.push({
-                    text: 'Color palette lacks harmony. Colors are too diverse and may look disconnected.',
-                    severity: 'warning',
-                    icon: '🎨'
-                });
-            } else if (scores.colorQuality < 70) {
-                recommendations.push({
-                    text: 'Color harmony could improve. Palette uses too many different hues.',
-                    severity: 'warning',
-                    icon: '⚡'
-                });
-            } else {
-                recommendations.push({
-                    text: 'Harmonious color scheme. Palette is cohesive and visually pleasing.',
-                    severity: '',
-                    icon: '✅'
-                });
-            }
-
-            // 5. Average Contrast Ratio
-            if (scores.avgContrast < 40) {
-                recommendations.push({
-                    text: 'Average contrast ratio is very low. Increase luminosity differences between colors.',
+                    text: 'Average contrast ratio is very low (' + scores.avgContrast.toFixed(2) + ':1). Increase luminosity differences.',
                     severity: 'danger',
                     icon: '◐◑'
                 });
-            } else if (scores.avgContrast < 65) {
+            } else if (scores.avgContrast < 4.5) {
                 recommendations.push({
-                    text: 'Average contrast ratio is moderate. Darken backgrounds or lighten text colors.',
+                    text: 'Average contrast ratio is moderate (' + scores.avgContrast.toFixed(2) + ':1). Aim for 4.5:1 minimum.',
+                    severity: 'warning',
+                    icon: '◐◑'
+                });
+            } else if (scores.avgContrast >= 7.0) {
+                recommendations.push({
+                    text: 'Excellent contrast ratio (' + scores.avgContrast.toFixed(2) + ':1). Supports AAA compliance.',
+                    severity: '',
+                    icon: '◐◑'
+                });
+            } else {
+                recommendations.push({
+                    text: 'Good contrast ratio (' + scores.avgContrast.toFixed(2) + ':1). Meets AA standard.',
+                    severity: '',
+                    icon: '◐◑'
+                });
+            }
+
+            // 5. Color Harmony
+            if (scores.harmony < 40) {
+                recommendations.push({
+                    text: 'Color palette lacks harmony (score: ' + scores.harmony.toFixed(0) + '). Colors may look disconnected.',
+                    severity: 'warning',
+                    icon: '🎨'
+                });
+            } else if (scores.harmony < 70) {
+                recommendations.push({
+                    text: 'Moderate color harmony (score: ' + scores.harmony.toFixed(0) + '). Could be more cohesive.',
                     severity: 'warning',
                     icon: '⚡'
                 });
             } else {
                 recommendations.push({
-                    text: 'Strong contrast ratio across palette. Text remains readable.',
+                    text: 'Harmonious color scheme (score: ' + scores.harmony.toFixed(0) + '). Palette is cohesive.',
                     severity: '',
                     icon: '✅'
                 });
             }
 
-            // 6. Failing Pairs
-            if (scores.failingPairs < 40) {
+            // 6. Extraction Quality (informational)
+            if (scores.extractionQuality > 80) {
                 recommendations.push({
-                    text: 'Over 60% of color pairs fail accessibility standards. Major revisions needed.',
-                    severity: 'danger',
-                    icon: '⚠️'
-                });
-            } else if (scores.failingPairs < 70) {
-                recommendations.push({
-                    text: 'Significant number of failing pairs. Focus on eliminating low-contrast combinations.',
-                    severity: 'warning',
-                    icon: '⚡'
-                });
-            }
-
-            // 7. Color Extraction
-            if (scores.extraction < 40) {
-                recommendations.push({
-                    text: 'Limited color palette (' + data.total_colors_found + ' colors). Expand palette for visual richness.',
-                    severity: 'warning',
+                    text: 'Rich color extraction (' + data.total_colors_found + ' unique colors). Good diversity.',
+                    severity: '',
                     icon: '🔍'
                 });
-            } else if (scores.extraction > 80) {
+            } else if (scores.extractionQuality > 40) {
                 recommendations.push({
-                    text: 'Rich color palette (' + data.total_colors_found + ' colors). Consider simplifying for better cohesion.',
-                    severity: 'warning',
-                    icon: '⚡'
+                    text: 'Moderate extraction (' + data.total_colors_found + ' colors). Palette has decent variety.',
+                    severity: '',
+                    icon: '🔍'
                 });
             } else {
                 recommendations.push({
-                    text: 'Good color palette (' + data.total_colors_found + ' colors). Well-balanced diversity.',
-                    severity: '',
-                    icon: '✅'
-                });
-            }
-
-            // 8. Palette Diversity
-            if (scores.diversity < 30) {
-                recommendations.push({
-                    text: 'Low palette diversity. Colors are too similar. Add more contrast in hue.',
+                    text: 'Limited color palette (' + data.total_colors_found + ' colors). May benefit from more variety.',
                     severity: 'warning',
-                    icon: '🌈'
-                });
-            } else if (scores.diversity > 80) {
-                recommendations.push({
-                    text: 'High palette diversity. May lack visual unity. Consider reducing hue range.',
-                    severity: 'warning',
-                    icon: '⚡'
+                    icon: '🔍'
                 });
             }
 
