@@ -1323,22 +1323,75 @@
             }
 
             // Actionable color-specific recommendations from API (v6.0)
+            // Shows exact replacement colors + WCAG improvement targets
             const actionableRecs = data.accessibility?.actionable_recommendations || [];
             if (actionableRecs.length > 0) {
-                actionableRecs.slice(0, 3).forEach(rec => {
+                actionableRecs.slice(0, 5).forEach(rec => {
+                    // Parse recommendation for better formatting
+                    const isReplacement = rec.recommendation.includes('Replace') || rec.recommendation.includes('Darken') || rec.recommendation.includes('Lighten');
+                    const severity = rec.recommendation.includes('7.0') ? 'warning' : '';
+
                     recommendations.push({
-                        text: `💡 ${rec.recommendation}`,
-                        severity: '',
-                        icon: '🔧'
+                        text: `🔧 ${rec.recommendation}`,
+                        severity: severity,
+                        icon: isReplacement ? '🎯' : '💡'
                     });
+                });
+
+                // Add WCAG target summary
+                if (scores.wcagAA < 100) {
+                    recommendations.push({
+                        text: `Target: Reach 4.5:1 contrast minimum for WCAG AA compliance across all colors`,
+                        severity: scores.wcagAA < 50 ? 'danger' : 'warning',
+                        icon: '📊'
+                    });
+                }
+                if (scores.wcagAAA < 50 && scores.wcagAA > 80) {
+                    recommendations.push({
+                        text: `Stretch goal: Achieve 7.0:1 contrast for WCAG AAA (enhanced accessibility)`,
+                        severity: '',
+                        icon: '⭐'
+                    });
+                }
+            }
+
+            // Palette optimization priority summary
+            const overallScore = (scores.accessibility + scores.wcagAA + scores.wcagAAA) / 3;
+            if (overallScore < 80) {
+                if (scores.avgContrast < 4.5) {
+                    recommendations.push({
+                        text: `Priority #1: Increase average contrast ratio from ${scores.avgContrast.toFixed(2)}:1 to 4.5:1 minimum`,
+                        severity: 'danger',
+                        icon: '🔴'
+                    });
+                }
+                if (scores.wcagAA < 70) {
+                    recommendations.push({
+                        text: `Priority #2: Fix ${Math.round(100 - scores.wcagAA)}% of colors failing AA (need +${Math.round(4.5 - scores.avgContrast)}:1 more contrast)`,
+                        severity: 'danger',
+                        icon: '🔴'
+                    });
+                }
+                if (scores.harmony < 60) {
+                    recommendations.push({
+                        text: `Priority #3: Improve color harmony by reducing hue variance or applying a standard scheme`,
+                        severity: 'warning',
+                        icon: '🟡'
+                    });
+                }
+            } else if (overallScore < 90) {
+                recommendations.push({
+                    text: `Accessibility is good. Next step: Aim for ${scores.wcagAA >= 90 ? 'AAA compliance (7.0:1)' : 'full AA compliance (4.5:1)'}`,
+                    severity: '',
+                    icon: '⬆️'
                 });
             }
 
-            // Palette improvement suggestions
+            // Palette improvement suggestions (detailed)
             if (data.palette_suggestions && data.palette_suggestions.length > 0) {
                 const topColor = data.palette_suggestions[0];
                 recommendations.push({
-                    text: `Primary color ${topColor.color} achieves best contrast with ${topColor.recommended_text} (ratio: ${topColor.best_ratio.toFixed(1)}, ${topColor.best_wcag})`,
+                    text: `Best practice: Use ${topColor.recommended_text} text on ${topColor.color} for ${topColor.best_ratio.toFixed(2)}:1 contrast (${topColor.best_wcag})`,
                     severity: '',
                     icon: '💡'
                 });
