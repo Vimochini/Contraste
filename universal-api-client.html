@@ -898,6 +898,7 @@
                         ${data.color_scheme.avg_hue_distance_deg ? `
                             <div style="margin-top: 12px; padding: 8px; background: var(--light); border-radius: 4px; font-size: 12px; color: var(--text-light);">
                                 📊 Hue distribution: Avg ${data.color_scheme.avg_hue_distance_deg}°, Max ${data.color_scheme.max_hue_distance_deg}°
+                                <br/>🎨 Chromatic: ${data.color_scheme.chromatic_count || 0} | ⚪ Neutral: ${data.color_scheme.achromatic_count || 0}
                             </div>
                         ` : ''}
                     </div>
@@ -962,10 +963,24 @@
                 </div>
             `;
 
+            // Color-specific actionable recommendations
+            if (data.actionable_recommendations && data.actionable_recommendations.length > 0) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <h3>🎯 Specific Color Fixes</h3>
+                        <div class="recommendations">
+                            ${data.actionable_recommendations.map(rec => {
+                                return `<div class="recommendation-item warning">💡 ${rec.color}: ${rec.recommendation}</div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             if (recommendations.length > 0) {
                 html += `
                     <div class="card" style="grid-column: 1 / -1;">
-                        <h3>📋 Actionable Recommendations</h3>
+                        <h3>📋 Accessibility Recommendations</h3>
                         <div class="recommendations">
                             ${recommendations.map(rec => {
                                 return `<div class="recommendation-item ${rec.severity}">${rec.icon} ${rec.text}</div>`;
