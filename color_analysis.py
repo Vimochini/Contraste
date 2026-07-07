@@ -856,9 +856,9 @@ def evaluate_against_black_and_white(hex_color: str) -> dict:
     }
 
 
-def evaluate_color_pairs(colors: list[str]) -> dict:
-    """Backward compatibility wrapper."""
-    result = evaluate_color_accessibility(colors)
+def evaluate_color_pairs(colors: list[str], coverage: dict[str, dict] | None = None) -> dict:
+    """Backward compatibility wrapper for v7.0."""
+    result = evaluate_color_accessibility(colors, coverage)
     # Map new field name back to old for backward compatibility
     result["pairs"] = result.pop("evaluations")
     result["total_pairs"] = result.pop("total_colors")
