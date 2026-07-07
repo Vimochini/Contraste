@@ -186,20 +186,20 @@ def sanitize_text(raw: str) -> str:
 _HEX_RE = re.compile(r'^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$')
 
 
-def validate_url(url: str) -> bool:
-    """Validate URL format."""
-    try:
-        result = urlparse(url)
-        return all([result.scheme in ('http', 'https'), result.netloc])
-    except Exception:
-        return False
+def validate_url(url: str) -> tuple[str | None, str | None]:
+    """
+    Validate and normalize URL.
+    Returns (normalized_url, error_string). One will be None.
+    """
+    return parse_analyze_request({"url": url})
 
 
-def validate_colors_list(colors: list) -> bool:
-    """Validate list of hex colors."""
-    if not isinstance(colors, list):
-        return False
-    return all(validate_hex_color(c) for c in colors)
+def validate_colors_list(colors) -> tuple[list | None, str | None]:
+    """
+    Validate list of hex colors.
+    Returns (colors, error_string). One will be None.
+    """
+    return parse_accessibility_request({"colors": colors})
 
 
 def validate_hex_color(color: str) -> bool:
