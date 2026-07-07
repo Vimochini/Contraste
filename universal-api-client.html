@@ -934,18 +934,32 @@
                 `;
             }
 
-            // Extracted Colors with WCAG Info
+            // Extracted Colors with WCAG Info + Semantic Element Type (v7.0)
             if (data.extracted_colors && data.extracted_colors.length > 0) {
-                // Build lookup map of colors to their accessibility info
+                // Build lookup map of colors to their accessibility & semantic info
                 const accessibilityMap = {};
+                const elementTypeMap = {};
+                const elementTypeLabels = {
+                    'text': '📝',
+                    'links': '🔗',
+                    'buttons': '🔘',
+                    'forms': '📋',
+                    'navigation': '📍',
+                    'backgrounds': '📦',
+                    'accents': '✨'
+                };
+
                 if (data.accessibility?.pairs) {
                     data.accessibility.pairs.forEach(pair => {
                         if (pair.color_1) {
-                            accessibilityMap[pair.color_1.toUpperCase()] = {
+                            const colorKey = pair.color_1.toUpperCase();
+                            accessibilityMap[colorKey] = {
                                 ratio: pair.contrast_ratio,
                                 wcagStatus: pair.wcag_status,
-                                isAccessible: pair.is_accessible
+                                isAccessible: pair.is_accessible,
+                                elementType: pair.element_type || 'backgrounds'
                             };
+                            elementTypeMap[colorKey] = pair.element_type || 'backgrounds';
                         }
                     });
                 }
@@ -953,15 +967,20 @@
                 html += `
                     <div class="card">
                         <h3>Extracted Colors (${data.total_colors_found})</h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px;">
                             ${data.extracted_colors.map(color => {
                                 const wcagInfo = accessibilityMap[color.toUpperCase()];
+                                const elementType = elementTypeMap[color.toUpperCase()] || 'backgrounds';
+                                const elementIcon = elementTypeLabels[elementType] || '?';
                                 const statusBg = wcagInfo?.isAccessible ? 'var(--success)' : 'var(--danger)';
                                 const statusIcon = wcagInfo?.wcagStatus === 'AAA' ? '★' : wcagInfo?.wcagStatus === 'AA' ? '✓' : '✗';
                                 return `
                                     <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: var(--light); border-radius: 6px;">
                                         <div style="width: 50px; height: 50px; background: ${color}; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 6px;"></div>
-                                        <div style="font-size: 10px; color: var(--text-light); margin-bottom: 4px;">${color}</div>
+                                        <div style="font-size: 9px; color: var(--text-light); margin-bottom: 3px; font-weight: 600;">
+                                            ${elementIcon} ${elementType.replace('_', ' ')}
+                                        </div>
+                                        <div style="font-size: 10px; color: var(--text-light); margin-bottom: 3px; font-family: monospace;">${color}</div>
                                         ${wcagInfo ? `
                                             <div style="font-size: 9px; color: ${statusBg}; font-weight: 700;">
                                                 ${statusIcon} ${wcagInfo.wcagStatus}
