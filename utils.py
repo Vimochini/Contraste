@@ -188,10 +188,20 @@ _HEX_RE = re.compile(r'^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$')
 
 def validate_url(url: str) -> tuple[str | None, str | None]:
     """
-    Validate and normalize URL.
+    Validate and normalize URL, with SSRF protection.
     Returns (normalized_url, error_string). One will be None.
     """
-    return parse_analyze_request({"url": url})
+    # Format validation
+    parsed_url, parse_err = parse_analyze_request({"url": url})
+    if parse_err:
+        return None, parse_err
+
+    # SSRF protection
+    ssrf_err = check_ssrf(parsed_url)
+    if ssrf_err:
+        return None, ssrf_err
+
+    return parsed_url, None
 
 
 def validate_colors_list(colors) -> tuple[list | None, str | None]:
