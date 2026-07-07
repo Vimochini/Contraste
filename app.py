@@ -54,23 +54,23 @@ CORS(app, resources={
 
 # ══════════════════════════════════════════════════════════════
 # FLASK-TALISMAN – Secure HTTP headers + HTTPS enforcement
-# Forces: HSTS, X-Content-Type-Options, X-Frame-Options, CSP
+# Disabled in test mode (TESTING=True) to allow test client
 # ══════════════════════════════════════════════════════════════
 from flask_talisman import Talisman
 
-# In development (DEBUG=true) we disable force_https so plain
-# http://localhost still works. In production it forces HTTPS.
-Talisman(
-    app,
-    force_https=not Config.DEBUG,          # True in production
-    strict_transport_security=True,        # HSTS header
-    session_cookie_secure=not Config.DEBUG,
-    content_security_policy={
-        "default-src": "'self'",
-        "script-src":  "'self' cdn.jsdelivr.net",  # allow Swagger UI
-        "style-src":   "'self' cdn.jsdelivr.net 'unsafe-inline'",
-    },
-)
+# Disable Talisman in testing mode; in dev/prod, enforce HTTPS
+if not app.config.get("TESTING", False):
+    Talisman(
+        app,
+        force_https=not Config.DEBUG,          # True in production
+        strict_transport_security=True,        # HSTS header
+        session_cookie_secure=not Config.DEBUG,
+        content_security_policy={
+            "default-src": "'self'",
+            "script-src":  "'self' cdn.jsdelivr.net",  # allow Swagger UI
+            "style-src":   "'self' cdn.jsdelivr.net 'unsafe-inline'",
+        },
+    )
 
 # ══════════════════════════════════════════════════════════════
 # FLASK-LIMITER – Rate limiting (prevent abuse)
