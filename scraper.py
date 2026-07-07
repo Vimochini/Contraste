@@ -1,22 +1,19 @@
 # ============================================================
-# scraper.py  –  Web scraping & color extraction
+# scraper.py  –  Web scraping & UI color extraction
 #
-# Improvements over v1:
+# v2.0 – UI Elements Only (No Images/Videos)
+#   • Extract from CSS backgrounds, text, buttons, links
+#   • Focus on form elements, navigation, interactive UI
+#   • Skip images, videos, and visual media
 #   • Reuse HTTP connections with requests.Session
-#   • Prefer og:image / twitter:image before first <img>
-#   • Skip tiny images (< 100×100 px) and tracking pixels
-#   • Strict response-size limit (no giant HTML downloads)
-#   • Specific exception handling – no bare except:
+#   • Strict response-size limit
 # ============================================================
 
-import io
 import re
 import logging
 import requests
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-from PIL import Image
-from colorthief import ColorThief
 
 from config import Config
 from utils import logger
@@ -69,116 +66,94 @@ def fetch_html(url: str, request_id: str) -> tuple[str | None, str | None]:
 
 
 # ══════════════════════════════════════════════════════════════
-# IMAGE SELECTION  (Prefer og:image, skip tiny/tracking images)
+# UI ELEMENT COLOR EXTRACTION
 # ══════════════════════════════════════════════════════════════
 
-def select_images(soup: BeautifulSoup, base_url: str) -> list[str]:
+def extract_ui_element_colors(soup: BeautifulSoup) -> dict[str, list[str]]:
     """
-    Return a ranked list of image URLs to analyse:
-      1. og:image meta tag
-      2. twitter:image meta tag
-      3. <img> tags with width/height > 100px (skip icons & pixels)
+    Extract colors from UI semantic elements.
+    Returns dict: {element_type: [colors]}
     """
-    image_urls = []
+    ui_colors = {
+        "backgrounds": [],
+        "text": [],
+        "buttons": [],
+        "links": [],
+        "forms": [],
+        "navigation": [],
+        "accents": [],
+    }
 
-    # ── Priority 1: Open Graph image ──────────────────────────
-    og = soup.find("meta", property="og:image") or \
-         soup.find("meta", attrs={"name": "og:image"})
-    if og and og.get("content"):
-        image_urls.append(urljoin(base_url, og["content"]))
+    # ── Navigation colors (nav, header, menu) ──────────────────
+    for nav in soup.find_all(["nav", "header"]):
+        style = nav.get("style", "")
+        classes = " ".join(nav.get("class", []))
+        colors = _extract_colors_from_style(style)
+        ui_colors["navigation"].extend(colors)
 
-    # ── Priority 2: Twitter card image ────────────────────────
-    tw = soup.find("meta", attrs={"name": "twitter:image"}) or \
-         soup.find("meta", attrs={"name": "twitter:image:src"})
-    if tw and tw.get("content"):
-        candidate = urljoin(base_url, tw["content"])
-        if candidate not in image_urls:
-            image_urls.append(candidate)
+    # ── Button colors (button, input[type=button], .btn) ──────
+    for btn in soup.find_all(["button", "a"]) + soup.find_all(attrs={"class": re.compile(r"btn|button")}):
+        style = btn.get("style", "")
+        colors = _extract_colors_from_style(style)
+        ui_colors["buttons"].extend(colors)
 
-    # ── Priority 3: <img> tags – skip tiny ones ───────────────
-    for img in soup.find_all("img", src=True):
-        src = img.get("src", "").strip()
-        if not src or src.startswith("data:"):
+    # ── Link colors (a, .link) ────────────────────────────────
+    for link in soup.find_all("a", href=True):
+        style = link.get("style", "")
+        colors = _extract_colors_from_style(style)
+        if colors:
+            ui_colors["links"].extend(colors)
+
+    # ── Form element colors (input, select, textarea) ────────
+    for form_elem in soup.find_all(["input", "select", "textarea"]):
+        style = form_elem.get("style", "")
+        colors = _extract_colors_from_style(style)
+        ui_colors["forms"].extend(colors)
+
+    # ── Background colors (divs, sections, containers) ────────
+    for container in soup.find_all(["div", "section", "main", "article"]):
+        style = container.get("style", "")
+        classes = " ".join(container.get("class", []))
+
+        # Skip image/video containers
+        if any(x in classes.lower() for x in ["image", "video", "picture", "gallery", "carousel"]):
             continue
 
-        # Heuristic: skip images declared < 100px in either dimension
-        try:
-            w = int(img.get("width", 0))
-            h = int(img.get("height", 0))
-            if (w and w < 100) or (h and h < 100):
-                continue
-        except (ValueError, TypeError):
-            pass
+        colors = _extract_colors_from_style(style)
+        if colors:
+            ui_colors["backgrounds"].extend(colors)
 
-        # Skip common tracking pixel paths
-        lower = src.lower()
-        if any(tok in lower for tok in ("pixel", "track", "beacon", "1x1", "spacer")):
-            continue
+    # ── Text colors (span, p, h1-h6 with style) ────────────────
+    for text_elem in soup.find_all(["span", "p", "h1", "h2", "h3", "h4", "h5", "h6"]):
+        style = text_elem.get("style", "")
+        colors = _extract_colors_from_style(style)
+        if colors and "color" in style.lower():
+            ui_colors["text"].extend(colors)
 
-        full = urljoin(base_url, src)
-        if full not in image_urls:
-            image_urls.append(full)
+    # ── Badge/accent colors (span.badge, em, strong) ────────
+    for accent in soup.find_all(["span", "em", "strong", "mark"]):
+        style = accent.get("style", "")
+        classes = " ".join(accent.get("class", []))
+        if "badge" in classes or "accent" in classes or "tag" in classes:
+            colors = _extract_colors_from_style(style)
+            ui_colors["accents"].extend(colors)
 
-        if len(image_urls) >= Config.MAX_IMAGES_PER_PAGE + 2:   # gather a few extras
-            break
-
-    return image_urls[:Config.MAX_IMAGES_PER_PAGE + 2]
+    return ui_colors
 
 
-# ══════════════════════════════════════════════════════════════
-# COLOR EXTRACTION FROM IMAGES  (ColorThief + PIL size check)
-# ══════════════════════════════════════════════════════════════
-
-def extract_colors_from_image_url(
-    img_url: str, request_id: str
-) -> list[tuple[int, int, int]]:
-    """
-    Download one image, verify it's not tiny, run ColorThief.
-    Returns a list of (R, G, B) tuples (up to 5 dominant colors).
-    Raises no exceptions – all failures are logged and return [].
-    """
-    try:
-        resp = _session.get(
-            img_url,
-            timeout=Config.REQUEST_TIMEOUT_SECONDS,
-            stream=True,
-        )
-        resp.raise_for_status()
-
-        # Size limit for images
-        data = b""
-        for chunk in resp.iter_content(8192):
-            data += chunk
-            if len(data) > Config.MAX_IMAGE_BYTES:
-                logger.debug("[%s] Image too large, skipping: %s", request_id, img_url)
-                return []
-
-        buf = io.BytesIO(data)
-
-        # ── Skip truly tiny images (tracking pixels etc.) ─────
-        try:
-            with Image.open(io.BytesIO(data)) as im:
-                w, h = im.size
-                if w < 100 or h < 100:
-                    logger.debug("[%s] Image too small (%dx%d), skipping", request_id, w, h)
-                    return []
-        except Exception:
-            return []   # not a valid image
-
-        # ── ColorThief: extract multiple dominant colors ───────
-        thief = ColorThief(buf)
-        palette = thief.get_palette(color_count=5, quality=5)
-        return palette
-
-    except requests.exceptions.Timeout:
-        logger.debug("[%s] Image fetch timed out: %s", request_id, img_url)
+def _extract_colors_from_style(style_str: str) -> list[str]:
+    """Extract hex colors from a CSS style attribute."""
+    if not style_str:
         return []
-    except requests.exceptions.RequestException as exc:
-        logger.debug("[%s] Image fetch failed (%s): %s", request_id, exc, img_url)
-        return []
-    except Exception as exc:
-        logger.debug("[%s] ColorThief error: %s", request_id, exc)
-        return []
+    colors = _HEX_PATTERN.findall(style_str)
+    result = []
+    for c in colors:
+        c = c.upper()
+        if len(c) == 4:
+            c = "#" + c[1]*2 + c[2]*2 + c[3]*2
+        if c not in _NOISE and c not in result:
+            result.append(c)
+    return result
 
 
 # ══════════════════════════════════════════════════════════════
@@ -220,7 +195,8 @@ def rgb_to_hex(rgb: tuple) -> str:
 
 def fetch_page_colors(url: str, request_id: str) -> tuple[list[str], str | None]:
     """
-    Full scrape pipeline.
+    Full scrape pipeline – UI elements only (no images/videos).
+    Priority: explicit UI element colors > HTML hex patterns
     Returns (color_list, error_string). error_string is None on success.
     """
     html, err = fetch_html(url, request_id)
@@ -229,22 +205,41 @@ def fetch_page_colors(url: str, request_id: str) -> tuple[list[str], str | None]
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # HTML color literals
-    html_colors = extract_hex_from_html(html)
+    # Extract colors from UI elements (buttons, links, nav, forms, etc.)
+    ui_colors = extract_ui_element_colors(soup)
 
-    # Image palette colors
-    image_urls = select_images(soup, url)
-    image_colors: list[str] = []
-    for img_url in image_urls:
-        for rgb in extract_colors_from_image_url(img_url, request_id):
-            h = rgb_to_hex(rgb)
-            if h not in _NOISE:
-                image_colors.append(h)
+    # Flatten UI colors by priority: buttons → links → nav → forms → backgrounds → text → accents
+    priority_order = ["buttons", "links", "navigation", "forms", "backgrounds", "text", "accents"]
+    ui_merged = []
+    ui_count = {}
+    for element_type in priority_order:
+        colors = ui_colors.get(element_type, [])
+        ui_merged.extend(colors)
+        ui_count[element_type] = len(colors)
 
-    # Merge: image colors first (richer signal), then HTML literals
-    merged = list(dict.fromkeys(image_colors + html_colors))
+    # Remove duplicates while preserving order
+    ui_unique = list(dict.fromkeys(ui_merged))
+
+    # Fallback: extract hex colors from HTML if UI extraction yielded nothing
+    html_hex_colors = []
+    if len(ui_unique) < 3:
+        html_hex_colors = extract_hex_from_html(html)
+
+    # Combine: UI colors first, then HTML hex patterns
+    merged = list(dict.fromkeys(ui_unique + html_hex_colors))
+
     logger.info(
-        "[%s] Extracted %d image colors + %d HTML colors → %d unique",
-        request_id, len(image_colors), len(html_colors), len(merged)
+        "[%s] Extracted UI: buttons=%d, links=%d, nav=%d, forms=%d, bg=%d, text=%d, accents=%d (total %d) + %d HTML hex → %d unique",
+        request_id,
+        ui_count.get("buttons", 0),
+        ui_count.get("links", 0),
+        ui_count.get("navigation", 0),
+        ui_count.get("forms", 0),
+        ui_count.get("backgrounds", 0),
+        ui_count.get("text", 0),
+        ui_count.get("accents", 0),
+        len(ui_unique),
+        len(html_hex_colors),
+        len(merged)
     )
     return merged[:12], None
