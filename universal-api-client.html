@@ -1049,6 +1049,41 @@
                 </div>
             `;
 
+            // CRITICAL FAILURES – v7.0 semantic weighting (HIGH PRIORITY)
+            const criticalFailures = data.accessibility?.critical_failures || [];
+            if (criticalFailures.length > 0) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1; border-left: 6px solid var(--danger);">
+                        <h3>🔴 CRITICAL: UI Elements Failing WCAG AA</h3>
+                        <p style="color: var(--danger); font-weight: 600; margin-bottom: 12px;">
+                            ${criticalFailures.length} critical element(s) do not meet WCAG AA (4.5:1). This significantly impacts accessibility.
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                            ${criticalFailures.map(fail => {
+                                const elementLabel = {
+                                    'text': '📝 Text',
+                                    'links': '🔗 Links',
+                                    'buttons': '🔘 Buttons',
+                                    'forms': '📋 Forms',
+                                    'navigation': '📍 Navigation'
+                                }[fail.type] || fail.type;
+                                return `
+                                    <div style="padding: 12px; background: var(--light); border-left: 4px solid var(--danger); border-radius: 4px;">
+                                        <div style="font-weight: 700; margin-bottom: 6px;">${elementLabel}</div>
+                                        <div style="font-family: monospace; font-size: 12px; margin-bottom: 6px;">${fail.color}</div>
+                                        <div style="font-size: 13px; color: var(--danger);">
+                                            <strong>Current:</strong> ${fail.ratio}:1
+                                            <br/><strong>Required:</strong> ${fail.required}:1
+                                            <br/><strong>Deficit:</strong> +${fail.deficit}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Color-specific actionable recommendations (from API)
             const apiRecs = data.accessibility?.actionable_recommendations || [];
             if (apiRecs.length > 0) {

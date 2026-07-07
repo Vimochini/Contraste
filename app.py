@@ -204,14 +204,14 @@ def analyze():
 
     # Scrape
     with Timer("color extraction", g.request_id):
-        colors, scrape_err = fetch_page_colors(url, g.request_id)
+        colors, coverage, scrape_err = fetch_page_colors(url, g.request_id)
     if scrape_err:
         return err(scrape_err, 502)
     if not colors:
         return err("No colors could be extracted from that page", 404)
 
-    scheme        = detect_color_scheme(colors)
-    accessibility = evaluate_color_pairs(colors)
+    scheme        = detect_color_scheme(colors, coverage)
+    accessibility = evaluate_color_pairs(colors, coverage)
     suggestions   = suggest_palette(colors)
 
     result = {
